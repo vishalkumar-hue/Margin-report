@@ -111,6 +111,7 @@
 
   .tabbar{
     display:flex; gap:6px; margin-bottom:22px; border-bottom:1px solid var(--border);
+    flex-wrap:wrap;
   }
   .tabbtn{
     background:transparent; border:none; color:var(--muted); font-size:13.5px; font-weight:600;
@@ -177,7 +178,7 @@
 
   <div class="filter-bar-wrap">
     <div class="filter-bar-head">
-      <h4>Filters (apply across both tabs)</h4>
+      <h4>Filters (apply across all tabs)</h4>
       <button class="clear-btn" id="clearFiltersBtn">Clear all</button>
     </div>
     <div class="filters" id="filterBar"></div>
@@ -185,6 +186,10 @@
 
   <div class="tabbar">
     <button class="tabbtn active" data-tab="overview">Overview</button>
+    <button class="tabbtn" data-tab="monthly">Monthly Trend</button>
+    <button class="tabbtn" data-tab="clients">Client Analysis</button>
+    <button class="tabbtn" data-tab="services">Service Analysis</button>
+    <button class="tabbtn" data-tab="status">Status Overview</button>
     <button class="tabbtn" data-tab="projects">Project-wise</button>
   </div>
 
@@ -230,6 +235,109 @@
     <div class="scroll-table">
     <table id="clientTable">
       <thead><tr><th>Client</th><th class="num">Projects</th><th class="num">Revenue</th><th class="num">Margin</th><th class="num">Margin %</th></tr></thead>
+      <tbody></tbody>
+    </table>
+    </div>
+  </div>
+
+  </div>
+
+  <div id="tab-monthly" class="tabpage">
+
+  <div class="kpis" id="monthlyKpiRow"></div>
+
+  <div class="card">
+    <h3>Revenue, Margin &amp; Margin % by Month <span class="tag">monthly trend</span></h3>
+    <div class="chart-box tall"><canvas id="monthlyChart"></canvas></div>
+  </div>
+
+  <div class="card">
+    <h3>Monthly Trend Table <span class="tag" id="monthlyTableTag">months</span></h3>
+    <div class="scroll-table">
+    <table id="monthlyTable">
+      <thead><tr><th>Month</th><th class="num">Revenue</th><th class="num">Margin</th><th class="num">Margin %</th><th class="num">Projects</th></tr></thead>
+      <tbody></tbody>
+    </table>
+    </div>
+  </div>
+
+  </div>
+
+  <div id="tab-clients" class="tabpage">
+
+  <div class="kpis" id="clientsKpiRow"></div>
+
+  <div class="card">
+    <h3>Top 15 Clients by Revenue <span class="tag">bar chart</span></h3>
+    <div class="chart-box tall"><canvas id="clientAnalysisChart"></canvas></div>
+  </div>
+
+  <div class="card">
+    <h3>Client Analysis <span class="tag" id="clientAnalysisTableTag">clients</span></h3>
+    <div class="search-row">
+      <input type="text" id="clientSearch" placeholder="Search client...">
+    </div>
+    <div class="scroll-table">
+    <table id="clientAnalysisTable">
+      <thead><tr><th>Client</th><th class="num">Revenue</th><th class="num">Margin</th><th class="num">Margin %</th><th class="num">Projects</th></tr></thead>
+      <tbody></tbody>
+    </table>
+    </div>
+  </div>
+
+  </div>
+
+  <div id="tab-services" class="tabpage">
+
+  <div class="kpis" id="servicesKpiRow"></div>
+
+  <div class="card">
+    <h3>Revenue, Margin &amp; Margin % by Service <span class="tag">bar chart</span></h3>
+    <div class="chart-box tall"><canvas id="serviceAnalysisChart"></canvas></div>
+  </div>
+
+  <div class="card">
+    <h3>Service Analysis <span class="tag" id="serviceAnalysisTableTag">services</span></h3>
+    <div class="scroll-table">
+    <table id="serviceAnalysisTable">
+      <thead><tr><th>Service</th><th class="num">Revenue</th><th class="num">Margin</th><th class="num">Margin %</th><th class="num">Projects</th></tr></thead>
+      <tbody></tbody>
+    </table>
+    </div>
+  </div>
+
+  </div>
+
+  <div id="tab-status" class="tabpage">
+
+  <div class="grid">
+    <div class="card">
+      <h3>Invoice Status <span class="tag">count &amp; revenue</span></h3>
+      <div class="chart-box"><canvas id="statusInvoiceChart"></canvas></div>
+      <div class="scroll-table" style="margin-top:14px;">
+      <table id="statusInvoiceTable">
+        <thead><tr><th>Status</th><th class="num">Count</th><th class="num">Revenue</th></tr></thead>
+        <tbody></tbody>
+      </table>
+      </div>
+    </div>
+    <div class="card">
+      <h3>Project Status <span class="tag">count &amp; revenue</span></h3>
+      <div class="chart-box"><canvas id="statusProjectChart"></canvas></div>
+      <div class="scroll-table" style="margin-top:14px;">
+      <table id="statusProjectTable">
+        <thead><tr><th>Status</th><th class="num">Count</th><th class="num">Revenue</th></tr></thead>
+        <tbody></tbody>
+      </table>
+      </div>
+    </div>
+  </div>
+
+  <div class="card">
+    <h3>Review Based on Invoice (Raised/Pending) <span class="tag">count &amp; revenue</span></h3>
+    <div class="scroll-table">
+    <table id="statusReviewTable">
+      <thead><tr><th>Status</th><th class="num">Count</th><th class="num">Revenue</th></tr></thead>
       <tbody></tbody>
     </table>
     </div>
@@ -302,7 +410,7 @@ const COLORS = {
 };
 const PALETTE = ['#d9a441','#33b8a8','#e0665f','#8b7ee8','#4f8bd0','#5cc96a','#e0a8d0','#e0d05f','#6fa8e0','#c98b5c','#8adfd4','#b98ae0'];
 
-// ---------------- Generic filter system (shared across both tabs) ----------------
+// ---------------- Generic filter system (shared across all tabs) ----------------
 // FILTER_DEFS: describes every filter shown in the top filter bar -
 // key = internal id, label = shown to user, field = matching key in each row object,
 // order (optional) = fixed sort order for values (used for Month so it doesn't sort A-Z).
@@ -322,10 +430,6 @@ const FILTER_DEFS = [
 
 // activeFilters: for every filter key we now store a Set of the EXACT values
 // the user selected (multi-select). Empty Set = no restriction = "show all".
-// (Earlier version stored a single text string and matched with substring
-// .includes(), which is what caused wrong results on numeric-looking fields
-// like Quarter / Margin % - e.g. typing "1" also matched "10", "12", "21".
-// Checkbox selection + exact match below fixes that.)
 const activeFilters = {};
 FILTER_DEFS.forEach(f => activeFilters[f.key] = new Set());
 
@@ -346,8 +450,20 @@ function uniqueValues(field, order){
 // triggerFilterChange: re-renders whichever tab is currently visible whenever
 // any filter selection changes.
 function triggerFilterChange(){
-  renderAll();
-  if (document.getElementById('tab-projects').classList.contains('active')) renderProjectTab();
+  const active = document.querySelector('.tabpage.active');
+  const tabId = active ? active.id : 'tab-overview';
+  renderTab(tabId);
+}
+
+// renderTab: dispatches to the correct render function for the currently
+// visible tab. Called on filter change and on tab switch.
+function renderTab(tabId){
+  if (tabId === 'tab-overview') renderAll();
+  else if (tabId === 'tab-monthly') renderMonthlyTab();
+  else if (tabId === 'tab-clients') renderClientsTab();
+  else if (tabId === 'tab-services') renderServicesTab();
+  else if (tabId === 'tab-status') renderStatusTab();
+  else if (tabId === 'tab-projects') renderProjectTab();
 }
 
 // buildFilterBar: builds one multi-select dropdown per entry in FILTER_DEFS.
@@ -502,6 +618,21 @@ function aggregateCount(rows, field){
     map.set(key, (map.get(key)||0) + 1);
   });
   return Array.from(map.entries()).map(([key, Count]) => ({key, Count}));
+}
+
+// aggregateCountRevenue: groups rows by a field, counting occurrences AND
+// summing revenue (used for the Status Overview tab's tables/charts, which
+// need both Count and Revenue per status - matches the Excel "Status Overview" sheet).
+function aggregateCountRevenue(rows, field){
+  const map = new Map();
+  rows.forEach(r => {
+    const key = r[field] || '(blank)';
+    if (!map.has(key)) map.set(key, {Count:0, Revenue:0});
+    const g = map.get(key);
+    g.Count += 1;
+    g.Revenue += (r.revenue || 0);
+  });
+  return Array.from(map.entries()).map(([key, g]) => ({key, Count: g.Count, Revenue: g.Revenue}));
 }
 
 // ---------------- Overview tab rendering ----------------
@@ -688,14 +819,252 @@ function renderAll(){
   renderTable();
 }
 
+// ---------------- Monthly Trend tab (mirrors Excel "Monthly Trend" sheet) ----------------
+function renderMonthlyKPIs(agg){
+  const row = document.getElementById('monthlyKpiRow');
+  row.innerHTML = '';
+  const totalRevenue = agg.reduce((a,b)=>a+b.Revenue,0);
+  const totalMargin = agg.reduce((a,b)=>a+b.Margin,0);
+  const bestMonth = agg.length ? [...agg].sort((a,b)=>b.MarginPct-a.MarginPct)[0] : null;
+  const items = [
+    {label:'Total Revenue', value: fmtCr(totalRevenue)},
+    {label:'Total Margin', value: fmtCr(totalMargin)},
+    {label:'Months in View', value: fmtNum(agg.length)},
+    {label:'Best Margin % Month', value: bestMonth ? bestMonth.key : '-'},
+  ];
+  items.forEach(it=>{
+    const div = document.createElement('div'); div.className='kpi';
+    div.innerHTML = `<div class="label">${it.label}</div><div class="value">${it.value}</div>`;
+    row.appendChild(div);
+  });
+}
+
+function renderMonthlyChart(agg){
+  destroy('monthly');
+  const ctx = document.getElementById('monthlyChart');
+  charts.monthly = new Chart(ctx, {
+    data:{
+      labels: agg.map(m=>m.key),
+      datasets:[
+        {type:'bar', label:'Revenue (Cr)', data: agg.map(m=>+(m.Revenue/1e7).toFixed(2)), backgroundColor:'rgba(79,139,208,0.55)', borderRadius:5, yAxisID:'y'},
+        {type:'bar', label:'Margin (Cr)', data: agg.map(m=>+(m.Margin/1e7).toFixed(2)), backgroundColor:'rgba(217,164,65,0.7)', borderRadius:5, yAxisID:'y'},
+        {type:'line', label:'Margin %', data: agg.map(m=>m.MarginPct), borderColor:COLORS.teal, backgroundColor:COLORS.teal, tension:0.35, yAxisID:'y1', pointRadius:4}
+      ]
+    },
+    options:{
+      responsive:true, maintainAspectRatio:false,
+      interaction:{mode:'index', intersect:false},
+      scales:{
+        y:{position:'left', grid:{color:'rgba(255,255,255,0.06)'}, title:{display:true,text:'₹ Cr'}},
+        y1:{position:'right', grid:{display:false}, title:{display:true,text:'Margin %'}, min:0}
+      },
+      plugins:{legend:{position:'bottom', labels:{boxWidth:12}}}
+    }
+  });
+}
+
+function renderMonthlyTable(agg){
+  const tbody = document.querySelector('#monthlyTable tbody');
+  tbody.innerHTML = '';
+  agg.forEach(m=>{
+    const tr = document.createElement('tr');
+    const pillClass = m.MarginPct >= 60 ? 'good' : (m.MarginPct >=0 ? 'mid':'bad');
+    tr.innerHTML = `<td>${m.key}</td><td class="num">${fmtCr(m.Revenue)}</td><td class="num">${fmtCr(m.Margin)}</td><td class="num"><span class="pill ${pillClass}">${m.MarginPct.toFixed(1)}%</span></td><td class="num">${fmtNum(m.Projects)}</td>`;
+    tbody.appendChild(tr);
+  });
+  document.getElementById('monthlyTableTag').textContent = agg.length + ' months';
+}
+
+function renderMonthlyTab(){
+  const rows = getFilteredRows();
+  const agg = aggregateBy(rows, 'month');
+  const idx = new Map(MONTH_ORDER.map((m,i)=>[m,i]));
+  agg.sort((a,b)=> (idx.has(a.key)?idx.get(a.key):999) - (idx.has(b.key)?idx.get(b.key):999));
+  renderMonthlyKPIs(agg);
+  renderMonthlyChart(agg);
+  renderMonthlyTable(agg);
+}
+
+// ---------------- Client Analysis tab (mirrors Excel "Client Analysis" sheet) ----------------
+let clientSearchTerm = '';
+
+function renderClientsKPIs(agg){
+  const row = document.getElementById('clientsKpiRow');
+  row.innerHTML = '';
+  const totalRevenue = agg.reduce((a,b)=>a+b.Revenue,0);
+  const totalMargin = agg.reduce((a,b)=>a+b.Margin,0);
+  const avgMarginPct = agg.length ? (agg.reduce((a,b)=>a+b.MarginPct,0)/agg.length) : 0;
+  const items = [
+    {label:'Total Clients', value: fmtNum(agg.length)},
+    {label:'Total Revenue', value: fmtCr(totalRevenue)},
+    {label:'Total Margin', value: fmtCr(totalMargin)},
+    {label:'Avg Margin % (across clients)', value: avgMarginPct.toFixed(1)+'%'},
+  ];
+  items.forEach(it=>{
+    const div = document.createElement('div'); div.className='kpi';
+    div.innerHTML = `<div class="label">${it.label}</div><div class="value">${it.value}</div>`;
+    row.appendChild(div);
+  });
+}
+
+function renderClientAnalysisChart(agg){
+  destroy('clientAnalysis');
+  const ctx = document.getElementById('clientAnalysisChart');
+  const top = agg.slice(0,15);
+  charts.clientAnalysis = new Chart(ctx, {
+    type:'bar',
+    data:{
+      labels: top.map(c=>c.key.length>26? c.key.slice(0,24)+'…': c.key),
+      datasets:[{label:'Revenue (Cr)', data: top.map(c=>+(c.Revenue/1e7).toFixed(2)), backgroundColor: PALETTE[4], borderRadius:5}]
+    },
+    options:{
+      indexAxis:'y', responsive:true, maintainAspectRatio:false,
+      plugins:{legend:{display:false}},
+      scales:{x:{title:{display:true, text:'₹ Cr'}}}
+    }
+  });
+}
+
+function renderClientAnalysisTable(agg){
+  const tbody = document.querySelector('#clientAnalysisTable tbody');
+  tbody.innerHTML = '';
+  const term = clientSearchTerm.trim().toLowerCase();
+  const filtered = term ? agg.filter(c => c.key.toLowerCase().includes(term)) : agg;
+  filtered.forEach(c=>{
+    const tr = document.createElement('tr');
+    const pillClass = c.MarginPct >= 60 ? 'good' : (c.MarginPct >=0 ? 'mid':'bad');
+    tr.innerHTML = `<td>${c.key}</td><td class="num">${fmtCr(c.Revenue)}</td><td class="num">${fmtCr(c.Margin)}</td><td class="num"><span class="pill ${pillClass}">${c.MarginPct.toFixed(1)}%</span></td><td class="num">${fmtNum(c.Projects)}</td>`;
+    tbody.appendChild(tr);
+  });
+  document.getElementById('clientAnalysisTableTag').textContent = filtered.length + ' of ' + agg.length + ' clients';
+}
+
+function renderClientsTab(){
+  const rows = getFilteredRows();
+  const agg = [...aggregateBy(rows, 'client')].sort((a,b)=>b.Revenue-a.Revenue);
+  renderClientsKPIs(agg);
+  renderClientAnalysisChart(agg);
+  renderClientAnalysisTable(agg);
+}
+
+document.getElementById('clientSearch').addEventListener('input', e=>{
+  clientSearchTerm = e.target.value;
+  const rows = getFilteredRows();
+  const agg = [...aggregateBy(rows, 'client')].sort((a,b)=>b.Revenue-a.Revenue);
+  renderClientAnalysisTable(agg);
+});
+
+// ---------------- Service Analysis tab (mirrors Excel "Service Analysis" sheet) ----------------
+function renderServicesKPIs(agg){
+  const row = document.getElementById('servicesKpiRow');
+  row.innerHTML = '';
+  const totalRevenue = agg.reduce((a,b)=>a+b.Revenue,0);
+  const totalMargin = agg.reduce((a,b)=>a+b.Margin,0);
+  const best = agg.length ? [...agg].sort((a,b)=>b.MarginPct-a.MarginPct)[0] : null;
+  const items = [
+    {label:'Total Services', value: fmtNum(agg.length)},
+    {label:'Total Revenue', value: fmtCr(totalRevenue)},
+    {label:'Total Margin', value: fmtCr(totalMargin)},
+    {label:'Best Margin % Service', value: best ? best.key : '-'},
+  ];
+  items.forEach(it=>{
+    const div = document.createElement('div'); div.className='kpi';
+    div.innerHTML = `<div class="label">${it.label}</div><div class="value">${it.value}</div>`;
+    row.appendChild(div);
+  });
+}
+
+function renderServiceAnalysisChart(agg){
+  destroy('serviceAnalysis');
+  const ctx = document.getElementById('serviceAnalysisChart');
+  charts.serviceAnalysis = new Chart(ctx, {
+    type:'bar',
+    data:{
+      labels: agg.map(s=>s.key),
+      datasets:[
+        {label:'Revenue (Cr)', data: agg.map(s=>+(s.Revenue/1e7).toFixed(2)), backgroundColor:'rgba(79,139,208,0.55)', borderRadius:5, yAxisID:'y'},
+        {label:'Margin (Cr)', data: agg.map(s=>+(s.Margin/1e7).toFixed(2)), backgroundColor:'rgba(217,164,65,0.7)', borderRadius:5, yAxisID:'y'}
+      ]
+    },
+    options:{
+      responsive:true, maintainAspectRatio:false,
+      plugins:{legend:{position:'bottom'}},
+      scales:{
+        x:{ticks:{autoSkip:false, maxRotation:45, minRotation:30}},
+        y:{title:{display:true,text:'₹ Cr'}}
+      }
+    }
+  });
+}
+
+function renderServiceAnalysisTable(agg){
+  const tbody = document.querySelector('#serviceAnalysisTable tbody');
+  tbody.innerHTML = '';
+  agg.forEach(s=>{
+    const tr = document.createElement('tr');
+    const pillClass = s.MarginPct >= 60 ? 'good' : (s.MarginPct >=0 ? 'mid':'bad');
+    tr.innerHTML = `<td>${s.key}</td><td class="num">${fmtCr(s.Revenue)}</td><td class="num">${fmtCr(s.Margin)}</td><td class="num"><span class="pill ${pillClass}">${s.MarginPct.toFixed(1)}%</span></td><td class="num">${fmtNum(s.Projects)}</td>`;
+    tbody.appendChild(tr);
+  });
+  document.getElementById('serviceAnalysisTableTag').textContent = agg.length + ' services';
+}
+
+function renderServicesTab(){
+  const rows = getFilteredRows();
+  const agg = [...aggregateBy(rows, 'service')].sort((a,b)=>b.Revenue-a.Revenue);
+  renderServicesKPIs(agg);
+  renderServiceAnalysisChart(agg);
+  renderServiceAnalysisTable(agg);
+}
+
+// ---------------- Status Overview tab (mirrors Excel "Status Overview" sheet) ----------------
+function renderStatusChart(chartId, canvasId, agg){
+  destroy(chartId);
+  const ctx = document.getElementById(canvasId);
+  charts[chartId] = new Chart(ctx, {
+    type:'doughnut',
+    data:{
+      labels: agg.map(a=>a.key),
+      datasets:[{data: agg.map(a=>a.Count), backgroundColor: PALETTE, borderWidth:2, borderColor:'#121b2e'}]
+    },
+    options:{responsive:true, maintainAspectRatio:false, plugins:{legend:{position:'bottom'}}}
+  });
+}
+
+function renderStatusTable(tableId, agg){
+  const tbody = document.querySelector('#' + tableId + ' tbody');
+  tbody.innerHTML = '';
+  agg.forEach(a=>{
+    const tr = document.createElement('tr');
+    tr.innerHTML = `<td>${a.key}</td><td class="num">${fmtNum(a.Count)}</td><td class="num">${fmtCr(a.Revenue)}</td>`;
+    tbody.appendChild(tr);
+  });
+}
+
+function renderStatusTab(){
+  const rows = getFilteredRows();
+
+  const invoiceAgg = [...aggregateCountRevenue(rows, 'invoiceStatus')].sort((a,b)=>b.Count-a.Count);
+  renderStatusChart('statusInvoice', 'statusInvoiceChart', invoiceAgg);
+  renderStatusTable('statusInvoiceTable', invoiceAgg);
+
+  const projectAgg = [...aggregateCountRevenue(rows, 'projectStatus')].sort((a,b)=>b.Count-a.Count);
+  renderStatusChart('statusProject', 'statusProjectChart', projectAgg);
+  renderStatusTable('statusProjectTable', projectAgg);
+
+  const reviewAgg = [...aggregateCountRevenue(rows, 'reviewInvoice')].sort((a,b)=>b.Count-a.Count);
+  renderStatusTable('statusReviewTable', reviewAgg);
+}
+
 // ---------------- Tab switching ----------------
 document.querySelectorAll('.tabbtn').forEach(btn=>{
   btn.addEventListener('click', ()=>{
     document.querySelectorAll('.tabbtn').forEach(b=>b.classList.remove('active'));
     document.querySelectorAll('.tabpage').forEach(p=>p.classList.remove('active'));
     btn.classList.add('active');
-    document.getElementById('tab-'+btn.dataset.tab).classList.add('active');
-    if(btn.dataset.tab === 'projects'){ renderProjectTab(); }
+    const tabId = 'tab-'+btn.dataset.tab;
+    document.getElementById(tabId).classList.add('active');
+    renderTab(tabId);
   });
 });
 
@@ -764,11 +1133,7 @@ function renderPosNegChart(){
 
 // renderProjectTable: fills the "All Projects" table, applying the free-text
 // search box and the "negative only" / "positive only" checkboxes on top of
-// the global filters. Search now checks every column actually shown in the
-// table (project code, client, client-with-SSC, service, month, exam name &
-// date, BIO & Fri Dimensioning, invoice status, billing status) instead of
-// just project code/client/service - that's what made it feel "not working"
-// when someone searched by month or invoice status etc.
+// the global filters.
 function renderProjectTable(){
   const tbody = document.querySelector('#projectTable tbody');
   tbody.innerHTML = '';
