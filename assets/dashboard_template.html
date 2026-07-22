@@ -264,6 +264,8 @@
         <thead><tr>
           <th>Project Code</th><th>Client</th><th>Client (With SSC)</th><th>Service</th><th>Month</th>
           <th>Exam Name &amp; Date</th><th>BIO &amp; Fri Dimensioning</th>
+          <th class="num">Centre Count</th><th class="num">Total Candidate</th><th class="num">Max Candidate</th>
+          <th>Op/Guard Actual Count/Cam Count/VOIP/Node</th>
           <th class="num">Revenue</th><th class="num">Margin</th><th class="num">Margin %</th>
           <th>Invoice Status</th><th>Status</th>
         </tr></thead>
@@ -771,7 +773,7 @@ function renderProjectTable(){
   const tbody = document.querySelector('#projectTable tbody');
   tbody.innerHTML = '';
   const term = projSearchTerm.trim().toLowerCase();
-  const searchFields = ['projectCode','client','clientSSC','service','month','examNameDate','bioFriDimensioning','invoiceStatus','billingStatus'];
+  const searchFields = ['projectCode','client','clientSSC','service','month','examNameDate','bioFriDimensioning','invoiceStatus','billingStatus','opGuardData'];
   const rows = getFilteredRows().filter(p=>{
     if(projNegOnly && (p.margin||0)>=0) return false;
     if(projPosOnly && (p.margin||0)<=0) return false;
@@ -784,6 +786,8 @@ function renderProjectTable(){
     const badge = (p.margin||0) < 0 ? '<span class="badge neg">Negative</span>' : '<span class="badge pos">Positive</span>';
     tr.innerHTML = `<td>${p.projectCode}</td><td>${p.client}</td><td>${p.clientSSC||''}</td><td>${p.service}</td><td>${p.month}</td>` +
       `<td>${p.examNameDate||''}</td><td>${p.bioFriDimensioning||''}</td>` +
+      `<td class="num">${fmtNum(Math.round(p.centreCount||0))}</td><td class="num">${fmtNum(Math.round(p.totalCandidate||0))}</td><td class="num">${fmtNum(Math.round(p.maxCandidate||0))}</td>` +
+      `<td>${p.opGuardData||''}</td>` +
       `<td class="num">${fmtNum(Math.round(p.revenue||0))}</td><td class="num">${fmtNum(Math.round(p.margin||0))}</td><td class="num">${(p.marginPct||0).toFixed(1)}%</td>` +
       `<td>${p.invoiceStatus||''}</td><td>${badge}</td>`;
     tbody.appendChild(tr);
