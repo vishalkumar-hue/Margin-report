@@ -49,13 +49,26 @@
   .kpi .delta{font-size:11.5px; margin-top:4px;}
   .up{color:var(--teal);} .down{color:var(--coral);}
   .filters{
-    display:flex; gap:10px; margin-bottom:20px; flex-wrap:wrap; align-items:center;
+    display:flex; gap:10px; margin-bottom:10px; flex-wrap:wrap; align-items:center;
   }
   .filters label{font-size:11.5px; color:var(--muted); margin-right:6px;}
   select{
     background:var(--panel-2); color:var(--text); border:1px solid var(--border);
-    border-radius:6px; padding:7px 10px; font-size:13px;
+    border-radius:6px; padding:7px 10px; font-size:13px; max-width:220px;
   }
+  .filter-bar-wrap{
+    border:1px solid var(--border); border-radius:10px; background:var(--panel);
+    padding:14px 16px 6px; margin-bottom:20px;
+  }
+  .filter-bar-head{
+    display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;
+  }
+  .filter-bar-head h4{margin:0; font-size:12.5px; color:var(--muted); text-transform:uppercase; letter-spacing:0.6px;}
+  .clear-btn{
+    background:transparent; border:1px solid var(--border); color:var(--muted);
+    border-radius:6px; padding:5px 10px; font-size:11.5px; cursor:pointer; font-family:inherit;
+  }
+  .clear-btn:hover{color:var(--coral); border-color:var(--coral);}
   .tabbar{
     display:flex; gap:6px; margin-bottom:22px; border-bottom:1px solid var(--border);
   }
@@ -122,21 +135,20 @@
     <div class="sub" id="periodLabel"></div>
   </div>
 
+  <div class="filter-bar-wrap">
+    <div class="filter-bar-head">
+      <h4>Filters (apply across both tabs)</h4>
+      <button class="clear-btn" id="clearFiltersBtn">Clear all</button>
+    </div>
+    <div class="filters" id="filterBar"></div>
+  </div>
+
   <div class="tabbar">
     <button class="tabbtn active" data-tab="overview">Overview</button>
     <button class="tabbtn" data-tab="projects">Project-wise</button>
   </div>
 
   <div id="tab-overview" class="tabpage active">
-
-  <div class="filters">
-    <div><label>Month</label>
-      <select id="monthFilter"><option value="all">All Months</option></select>
-    </div>
-    <div><label>Service</label>
-      <select id="serviceFilter"><option value="all">All Services</option></select>
-    </div>
-  </div>
 
   <div class="kpis" id="kpiRow"></div>
 
@@ -208,7 +220,12 @@
     </div>
     <div class="scroll-table">
       <table id="projectTable">
-        <thead><tr><th>Project Code</th><th>Client</th><th>Service</th><th>Month</th><th class="num">Revenue</th><th class="num">Margin</th><th class="num">Margin %</th><th>Status</th></tr></thead>
+        <thead><tr>
+          <th>Project Code</th><th>Client</th><th>Client (With SSC)</th><th>Service</th><th>Month</th>
+          <th>Exam Name &amp; Date</th><th>BIO &amp; Fri Dimensioning</th>
+          <th class="num">Revenue</th><th class="num">Margin</th><th class="num">Margin %</th>
+          <th>Invoice Status</th><th>Status</th>
+        </tr></thead>
         <tbody></tbody>
       </table>
     </div>
@@ -219,9 +236,8 @@
 </div>
 
 <script>
-const DATA = __DATA_JSON__;
-
-const PROJECT_DATA = __PROJECT_JSON__;
+const ROWS = __ROWS_JSON__;
+const MONTH_ORDER = __MONTH_ORDER_JSON__;
 
 const fmtCr = v => {
   if (v === null || v === undefined || isNaN(v)) return '-';
@@ -239,38 +255,124 @@ const COLORS = {
 };
 const PALETTE = ['#d9a441','#33b8a8','#e0665f','#8b7ee8','#4f8bd0','#5cc96a','#e0a8d0','#e0d05f','#6fa8e0','#c98b5c','#8adfd4','#b98ae0'];
 
-let monthFilter = 'all';
-let serviceFilter = 'all';
+// ---------------- Generic filter system (shared across both tabs) ----------------
+const FILTER_DEFS = [
+  {key:'month', label:'Month', field:'month', order: MONTH_ORDER},
+  {key:'quarter', label:'Quarter', field:'quarter'},
+  {key:'service', label:'Service', field:'service'},
+  {key:'client', label:'Client', field:'client'},
+  {key:'clientSSC', label:'Client (With SSC)', field:'clientSSC'},
+  {key:'examNameDate', label:'Exam Name & Date', field:'examNameDate'},
+  {key:'invoiceStatus', label:'Invoice Status', field:'invoiceStatus'},
+  {key:'reviewInvoice', label:'Review (Raised/Pending)', field:'reviewInvoice'},
+  {key:'billingType', label:'Billing Type', field:'billingType'},
+  {key:'billingStatus', label:'Billing Status', field:'billingStatus'},
+  {key:'marginPct', label:'Margin % - Overall Subtotal', field:'marginPct'},
+  {key:'marginPctOps', label:'Margin % - Overall Subtotal-OPs', field:'marginPctOps'},
+];
 
-function populateFilters(){
-  const mSel = document.getElementById('monthFilter');
-  DATA.monthly.forEach(m=>{
-    const o = document.createElement('option'); o.value = m.Month; o.textContent = m.Month;
-    mSel.appendChild(o);
-  });
-  const sSel = document.getElementById('serviceFilter');
-  DATA.service.forEach(s=>{
-    const o = document.createElement('option'); o.value = s.Service; o.textContent = s.Service;
-    sSel.appendChild(o);
-  });
-  mSel.addEventListener('change', e=>{ monthFilter = e.target.value; renderAll(); });
-  sSel.addEventListener('change', e=>{ serviceFilter = e.target.value; renderAll(); });
+const activeFilters = {};
+FILTER_DEFS.forEach(f => activeFilters[f.key] = 'all');
+
+function uniqueValues(field, order){
+  const vals = Array.from(new Set(ROWS.map(r => r[field]).filter(v => v !== null && v !== undefined && v !== '')));
+  if (order && order.length){
+    const idx = new Map(order.map((m,i)=>[m,i]));
+    vals.sort((a,b) => (idx.has(a)?idx.get(a):999) - (idx.has(b)?idx.get(b):999));
+  } else {
+    vals.sort();
+  }
+  return vals;
 }
 
-function filteredScatter(){
-  return DATA.scatter.filter(r => (monthFilter==='all' || r.Month===monthFilter) && (serviceFilter==='all' || r.Service===serviceFilter));
+function buildFilterBar(){
+  const bar = document.getElementById('filterBar');
+  bar.innerHTML = '';
+  FILTER_DEFS.forEach(f => {
+    const wrap = document.createElement('div');
+    const label = document.createElement('label');
+    label.textContent = f.label;
+    const select = document.createElement('select');
+    select.id = 'filter_' + f.key;
+    const optAll = document.createElement('option');
+    optAll.value = 'all'; optAll.textContent = 'All';
+    select.appendChild(optAll);
+    uniqueValues(f.field, f.order).forEach(v => {
+      const o = document.createElement('option');
+      o.value = v; o.textContent = v;
+      select.appendChild(o);
+    });
+    select.addEventListener('change', e => {
+      activeFilters[f.key] = e.target.value;
+      renderAll();
+      if (document.getElementById('tab-projects').classList.contains('active')) renderProjectTab();
+    });
+    wrap.appendChild(label);
+    wrap.appendChild(select);
+    bar.appendChild(wrap);
+  });
 }
 
+document.getElementById('clearFiltersBtn').addEventListener('click', () => {
+  FILTER_DEFS.forEach(f => {
+    activeFilters[f.key] = 'all';
+    const sel = document.getElementById('filter_' + f.key);
+    if (sel) sel.value = 'all';
+  });
+  renderAll();
+  if (document.getElementById('tab-projects').classList.contains('active')) renderProjectTab();
+});
+
+function rowMatches(row){
+  return FILTER_DEFS.every(f => {
+    const v = activeFilters[f.key];
+    return v === 'all' || v === undefined || String(row[f.field]) === String(v);
+  });
+}
+
+function getFilteredRows(){
+  return ROWS.filter(rowMatches);
+}
+
+// ---------------- Client-side aggregation from row-level data ----------------
+function aggregateBy(rows, field){
+  const map = new Map();
+  rows.forEach(r => {
+    const key = r[field] || '(blank)';
+    if (!map.has(key)) map.set(key, {Revenue:0, Margin:0, Projects:0});
+    const g = map.get(key);
+    g.Revenue += (r.revenue || 0);
+    g.Margin += (r.margin || 0);
+    g.Projects += 1;
+  });
+  return Array.from(map.entries()).map(([key, g]) => ({
+    key, Revenue: g.Revenue, Margin: g.Margin, Projects: g.Projects,
+    MarginPct: g.Revenue !== 0 ? (g.Margin / g.Revenue * 100) : 0
+  }));
+}
+
+function aggregateCount(rows, field){
+  const map = new Map();
+  rows.forEach(r => {
+    const key = r[field] || '(blank)';
+    map.set(key, (map.get(key)||0) + 1);
+  });
+  return Array.from(map.entries()).map(([key, Count]) => ({key, Count}));
+}
+
+// ---------------- Overview tab rendering ----------------
 let charts = {};
 function destroy(id){ if(charts[id]){ charts[id].destroy(); } }
 
 function renderKPIs(){
-  const rows = filteredScatter();
-  const totalRevenue = rows.reduce((a,b)=>a+b.Revenue,0);
+  const rows = getFilteredRows();
+  const totalRevenue = rows.reduce((a,b)=>a+(b.revenue||0),0);
   const totalProjects = rows.length;
-  const avgMargin = rows.length ? (rows.reduce((a,b)=>a+b['MarginPct'],0)/rows.length) : 0;
-  const pendingCount = DATA.istatus.find(i=>i['Invoice Status']==='Pending')?.Count || 0;
-  const activeCount = DATA.pstatus.find(p=>p['Project Status']==='Active')?.Count || 0;
+  const avgMargin = rows.length ? (rows.reduce((a,b)=>a+(b.marginPct||0),0)/rows.length) : 0;
+  const reviewAgg = aggregateCount(rows, 'reviewInvoice');
+  const pendingCount = reviewAgg.find(i=>/pending/i.test(i.key))?.Count || 0;
+  const statusAgg = aggregateCount(rows, 'projectStatus');
+  const activeCount = statusAgg.find(p=>/active/i.test(p.key))?.Count || 0;
 
   const kpiRow = document.getElementById('kpiRow');
   kpiRow.innerHTML = '';
@@ -291,14 +393,18 @@ function renderKPIs(){
 function renderTrend(){
   destroy('trend');
   const ctx = document.getElementById('trendChart');
-  const labels = DATA.monthly.map(m=>m.Month);
+  const rows = getFilteredRows();
+  const agg = aggregateBy(rows, 'month');
+  const idx = new Map(MONTH_ORDER.map((m,i)=>[m,i]));
+  agg.sort((a,b)=> (idx.has(a.key)?idx.get(a.key):999) - (idx.has(b.key)?idx.get(b.key):999));
+  const labels = agg.map(m=>m.key);
   charts.trend = new Chart(ctx, {
     data:{
       labels,
       datasets:[
-        {type:'bar', label:'Revenue (Cr)', data: DATA.monthly.map(m=>+(m.Revenue/1e7).toFixed(2)), backgroundColor:'rgba(79,139,208,0.55)', borderRadius:5, yAxisID:'y'},
-        {type:'bar', label:'Margin (Cr)', data: DATA.monthly.map(m=>+(m.Margin/1e7).toFixed(2)), backgroundColor:'rgba(217,164,65,0.7)', borderRadius:5, yAxisID:'y'},
-        {type:'line', label:'Margin %', data: DATA.monthly.map(m=>m.MarginPct), borderColor:COLORS.teal, backgroundColor:COLORS.teal, tension:0.35, yAxisID:'y1', pointRadius:4}
+        {type:'bar', label:'Revenue (Cr)', data: agg.map(m=>+(m.Revenue/1e7).toFixed(2)), backgroundColor:'rgba(79,139,208,0.55)', borderRadius:5, yAxisID:'y'},
+        {type:'bar', label:'Margin (Cr)', data: agg.map(m=>+(m.Margin/1e7).toFixed(2)), backgroundColor:'rgba(217,164,65,0.7)', borderRadius:5, yAxisID:'y'},
+        {type:'line', label:'Margin %', data: agg.map(m=>m.MarginPct), borderColor:COLORS.teal, backgroundColor:COLORS.teal, tension:0.35, yAxisID:'y1', pointRadius:4}
       ]
     },
     options:{
@@ -316,11 +422,13 @@ function renderTrend(){
 function renderStatus(){
   destroy('status');
   const ctx = document.getElementById('statusChart');
+  const rows = getFilteredRows();
+  const agg = aggregateCount(rows, 'projectStatus');
   charts.status = new Chart(ctx, {
     type:'doughnut',
     data:{
-      labels: DATA.pstatus.map(p=>p['Project Status']),
-      datasets:[{data: DATA.pstatus.map(p=>p.Count), backgroundColor:[COLORS.teal, COLORS.coral, COLORS.gold], borderWidth:2, borderColor:'#121b2e'}]
+      labels: agg.map(p=>p.key),
+      datasets:[{data: agg.map(p=>p.Count), backgroundColor: PALETTE, borderWidth:2, borderColor:'#121b2e'}]
     },
     options:{responsive:true, maintainAspectRatio:false, plugins:{legend:{position:'bottom'}}}
   });
@@ -329,11 +437,13 @@ function renderStatus(){
 function renderClient(){
   destroy('client');
   const ctx = document.getElementById('clientChart');
-  const top = [...DATA.client].sort((a,b)=>b.Revenue-a.Revenue).slice(0,10);
+  const rows = getFilteredRows();
+  const agg = aggregateBy(rows, 'client');
+  const top = [...agg].sort((a,b)=>b.Revenue-a.Revenue).slice(0,10);
   charts.client = new Chart(ctx, {
     type:'bar',
     data:{
-      labels: top.map(c=>c.Client.length>22? c.Client.slice(0,20)+'…': c.Client),
+      labels: top.map(c=>c.key.length>22? c.key.slice(0,20)+'…': c.key),
       datasets:[{label:'Revenue (Cr)', data: top.map(c=>+(c.Revenue/1e7).toFixed(2)), backgroundColor: PALETTE[4], borderRadius:5}]
     },
     options:{
@@ -347,12 +457,13 @@ function renderClient(){
 function renderService(){
   destroy('service');
   const ctx = document.getElementById('serviceChart');
-  const svc = [...DATA.service].sort((a,b)=>b.MarginPct-a.MarginPct);
+  const rows = getFilteredRows();
+  const agg = [...aggregateBy(rows, 'service')].sort((a,b)=>b.MarginPct-a.MarginPct);
   charts.service = new Chart(ctx, {
     type:'bar',
     data:{
-      labels: svc.map(s=>s.Service),
-      datasets:[{label:'Margin %', data: svc.map(s=>s.MarginPct), backgroundColor: svc.map(s=> s.MarginPct<0? COLORS.coral : PALETTE[1]), borderRadius:5}]
+      labels: agg.map(s=>s.key),
+      datasets:[{label:'Margin %', data: agg.map(s=>s.MarginPct), backgroundColor: agg.map(s=> s.MarginPct<0? COLORS.coral : PALETTE[1]), borderRadius:5}]
     },
     options:{
       responsive:true, maintainAspectRatio:false,
@@ -365,8 +476,8 @@ function renderService(){
 function renderScatter(){
   destroy('scatter');
   const ctx = document.getElementById('scatterChart');
-  const rows = filteredScatter();
-  const points = rows.map(r=>({x: r.Revenue/1e5, y: r['MarginPct'], r: Math.min(18, Math.max(4, Math.sqrt(Math.abs(r.Revenue))/700))}));
+  const rows = getFilteredRows();
+  const points = rows.map(r=>({x: (r.revenue||0)/1e5, y: r.marginPct||0, r: Math.min(18, Math.max(4, Math.sqrt(Math.abs(r.revenue||0))/700))}));
   charts.scatter = new Chart(ctx, {
     type:'bubble',
     data:{ datasets:[{label:'Projects', data: points, backgroundColor:'rgba(139,126,232,0.55)', borderColor:'rgba(139,126,232,0.9)'}] },
@@ -384,11 +495,13 @@ function renderScatter(){
 function renderInvoice(){
   destroy('invoice');
   const ctx = document.getElementById('invoiceChart');
+  const rows = getFilteredRows();
+  const agg = aggregateCount(rows, 'reviewInvoice');
   charts.invoice = new Chart(ctx, {
     type:'pie',
     data:{
-      labels: DATA.istatus.map(i=>i['Invoice Status']),
-      datasets:[{data: DATA.istatus.map(i=>i.Count), backgroundColor:[COLORS.teal, COLORS.gold, COLORS.coral], borderWidth:2, borderColor:'#121b2e'}]
+      labels: agg.map(i=>i.key),
+      datasets:[{data: agg.map(i=>i.Count), backgroundColor:[COLORS.teal, COLORS.gold, COLORS.coral, COLORS.violet], borderWidth:2, borderColor:'#121b2e'}]
     },
     options:{responsive:true, maintainAspectRatio:false, plugins:{legend:{position:'bottom'}}}
   });
@@ -397,14 +510,15 @@ function renderInvoice(){
 function renderTable(){
   const tbody = document.querySelector('#clientTable tbody');
   tbody.innerHTML='';
-  const rows = [...DATA.client].sort((a,b)=>b.Revenue-a.Revenue);
-  rows.forEach(c=>{
+  const rows = getFilteredRows();
+  const agg = [...aggregateBy(rows, 'client')].sort((a,b)=>b.Revenue-a.Revenue);
+  agg.forEach(c=>{
     const tr = document.createElement('tr');
     const pillClass = c.MarginPct >= 60 ? 'good' : (c.MarginPct >=0 ? 'mid':'bad');
-    tr.innerHTML = `<td>${c.Client}</td><td class="num">${c.Projects}</td><td class="num">${fmtCr(c.Revenue)}</td><td class="num">${fmtCr(c.Margin)}</td><td class="num"><span class="pill ${pillClass}">${c.MarginPct.toFixed(1)}%</span></td>`;
+    tr.innerHTML = `<td>${c.key}</td><td class="num">${c.Projects}</td><td class="num">${fmtCr(c.Revenue)}</td><td class="num">${fmtCr(c.Margin)}</td><td class="num"><span class="pill ${pillClass}">${c.MarginPct.toFixed(1)}%</span></td>`;
     tbody.appendChild(tr);
   });
-  document.getElementById('clientTableTag').textContent = DATA.client.length + ' clients';
+  document.getElementById('clientTableTag').textContent = agg.length + ' clients';
 }
 
 function renderAll(){
@@ -432,19 +546,19 @@ document.querySelectorAll('.tabbtn').forEach(btn=>{
 // ---------------- Project-wise tab ----------------
 let projSearchTerm = '';
 let projNegOnly = false;
-let projChartsInit = false;
 
 function renderProjKPIs(){
-  const neg = PROJECT_DATA.filter(p=>p.Margin<0);
-  const pos = PROJECT_DATA.filter(p=>p.Margin>0);
-  const totalNeg = neg.reduce((a,b)=>a+b.Margin,0);
+  const rows = getFilteredRows();
+  const neg = rows.filter(p=>(p.margin||0)<0);
+  const pos = rows.filter(p=>(p.margin||0)>0);
+  const totalNeg = neg.reduce((a,b)=>a+(b.margin||0),0);
   const row = document.getElementById('projKpiRow');
   row.innerHTML = '';
   const items = [
     {label:'Negative-Margin Projects', value: fmtNum(neg.length), cls:'down'},
     {label:'Positive-Margin Projects', value: fmtNum(pos.length), cls:'up'},
     {label:'Total Negative Margin', value: fmtCr(totalNeg), cls:'down'},
-    {label:'Total Projects', value: fmtNum(PROJECT_DATA.length), cls:''},
+    {label:'Total Projects', value: fmtNum(rows.length), cls:''},
   ];
   items.forEach(it=>{
     const div = document.createElement('div'); div.className='kpi';
@@ -456,12 +570,13 @@ function renderProjKPIs(){
 function renderNegChart(){
   destroy('neg');
   const ctx = document.getElementById('negChart');
-  const neg = [...PROJECT_DATA].filter(p=>p.Margin<0).sort((a,b)=>a.Margin-b.Margin).slice(0,40);
+  const rows = getFilteredRows();
+  const neg = [...rows].filter(p=>(p.margin||0)<0).sort((a,b)=>a.margin-b.margin).slice(0,40);
   charts.neg = new Chart(ctx, {
     type:'bar',
     data:{
-      labels: neg.map(p=> p.ProjectCode.length>28 ? p.ProjectCode.slice(0,26)+'…' : p.ProjectCode),
-      datasets:[{label:'Margin (₹)', data: neg.map(p=>p.Margin), backgroundColor: COLORS.coral, borderRadius:4}]
+      labels: neg.map(p=> p.projectCode.length>28 ? p.projectCode.slice(0,26)+'…' : p.projectCode),
+      datasets:[{label:'Margin (₹)', data: neg.map(p=>p.margin), backgroundColor: COLORS.coral, borderRadius:4}]
     },
     options:{
       indexAxis:'y', responsive:true, maintainAspectRatio:false,
@@ -474,8 +589,9 @@ function renderNegChart(){
 function renderPosNegChart(){
   destroy('posneg');
   const ctx = document.getElementById('posNegChart');
-  const neg = PROJECT_DATA.filter(p=>p.Margin<0).length;
-  const pos = PROJECT_DATA.filter(p=>p.Margin>0).length;
+  const rows = getFilteredRows();
+  const neg = rows.filter(p=>(p.margin||0)<0).length;
+  const pos = rows.filter(p=>(p.margin||0)>0).length;
   charts.posneg = new Chart(ctx, {
     type:'doughnut',
     data:{
@@ -490,29 +606,28 @@ function renderProjectTable(){
   const tbody = document.querySelector('#projectTable tbody');
   tbody.innerHTML = '';
   const term = projSearchTerm.toLowerCase();
-  const rows = PROJECT_DATA.filter(p=>{
-    if(projNegOnly && p.Margin>=0) return false;
+  const rows = getFilteredRows().filter(p=>{
+    if(projNegOnly && (p.margin||0)>=0) return false;
     if(!term) return true;
-    return p.ProjectCode.toLowerCase().includes(term) || p.Client.toLowerCase().includes(term) || p.Service.toLowerCase().includes(term);
+    return (p.projectCode||'').toLowerCase().includes(term) || (p.client||'').toLowerCase().includes(term) || (p.service||'').toLowerCase().includes(term);
   });
   rows.forEach(p=>{
     const tr = document.createElement('tr');
-    tr.className = p.Margin < 0 ? 'row-neg' : 'row-pos';
-    const badge = p.Margin < 0 ? '<span class="badge neg">Negative</span>' : '<span class="badge pos">Positive</span>';
-    tr.innerHTML = `<td>${p.ProjectCode}</td><td>${p.Client}</td><td>${p.Service}</td><td>${p.Month}</td>` +
-      `<td class="num">${fmtNum(Math.round(p.Revenue))}</td><td class="num">${fmtNum(Math.round(p.Margin))}</td><td class="num">${p.MarginPct.toFixed(1)}%</td><td>${badge}</td>`;
+    tr.className = (p.margin||0) < 0 ? 'row-neg' : 'row-pos';
+    const badge = (p.margin||0) < 0 ? '<span class="badge neg">Negative</span>' : '<span class="badge pos">Positive</span>';
+    tr.innerHTML = `<td>${p.projectCode}</td><td>${p.client}</td><td>${p.clientSSC||''}</td><td>${p.service}</td><td>${p.month}</td>` +
+      `<td>${p.examNameDate||''}</td><td>${p.bioFriDimensioning||''}</td>` +
+      `<td class="num">${fmtNum(Math.round(p.revenue||0))}</td><td class="num">${fmtNum(Math.round(p.margin||0))}</td><td class="num">${(p.marginPct||0).toFixed(1)}%</td>` +
+      `<td>${p.invoiceStatus||''}</td><td>${badge}</td>`;
     tbody.appendChild(tr);
   });
-  document.getElementById('projTableTag').textContent = rows.length + ' of ' + PROJECT_DATA.length + ' projects';
+  document.getElementById('projTableTag').textContent = rows.length + ' of ' + ROWS.length + ' projects';
 }
 
 function renderProjectTab(){
   renderProjKPIs();
-  if(!projChartsInit){
-    renderNegChart();
-    renderPosNegChart();
-    projChartsInit = true;
-  }
+  renderNegChart();
+  renderPosNegChart();
   renderProjectTable();
 }
 
@@ -525,7 +640,7 @@ document.getElementById('negOnly').addEventListener('change', e=>{
   renderProjectTable();
 });
 
-populateFilters();
+buildFilterBar();
 document.getElementById('periodLabel').textContent = '__PERIOD_LABEL__';
 renderAll();
 </script>
