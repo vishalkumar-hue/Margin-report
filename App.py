@@ -2,7 +2,8 @@
 Margin Dashboard - Live Streamlit App (exact original UI + full filter set)
 Fetches live data from a public Google Sheet, cleans it, and sends
 row-level data to the ORIGINAL Chart.js HTML/CSS dashboard, which now
-does all filtering + aggregation client-side across BOTH tabs.
+does all filtering + aggregation client-side across ALL tabs
+(Overview, Monthly Trend, Client Analysis, Service Analysis, Status Overview, Project-wise).
 """
 
 import json
