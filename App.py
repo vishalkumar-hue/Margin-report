@@ -1,8 +1,8 @@
 """
-Margin Dashboard - Live Streamlit App (exact original UI)
-Fetches live data from a public Google Sheet, computes the same
-aggregates as the original static dashboard, and renders the
-ORIGINAL Chart.js HTML/CSS design via an embedded component.
+Margin Dashboard - Live Streamlit App (exact original UI + full filter set)
+Fetches live data from a public Google Sheet, cleans it, and sends
+row-level data to the ORIGINAL Chart.js HTML/CSS dashboard, which now
+does all filtering + aggregation client-side across BOTH tabs.
 """
 
 import json
@@ -71,53 +71,113 @@ def clean_numeric(series: pd.Series) -> pd.Series:
     return pd.to_numeric(cleaned, errors="coerce")
 
 
-REQUIRED_COLS = [
-    "Client", "Service", "Month", "Exam Name", "Project Status",
-    "Revenue", "Margin Amount Based On Overall Subtotal",
-    "Margin Percentage Based On Overall Subtotal",
-    "Project Code Revenue Report",
-    "Invoice Status", "Review Based on Invoice (Raised/Pending)",
-]
+def find_col(df: pd.DataFrame, target: str):
+    """Fuzzy-match a column name ignoring case/whitespace, since sheet
+    headers sometimes have stray spaces or slightly different casing
+    than what's typed here (e.g. 'Biling Status' vs 'Billing Status')."""
+    target_norm = target.strip().lower().replace(" ", "")
+    for c in df.columns:
+        if c.strip().lower().replace(" ", "") == target_norm:
+            return c
+    return None
 
 
-def prepare_data(raw: pd.DataFrame) -> pd.DataFrame:
+# Logical field -> possible sheet header(s) to try, in order.
+COLUMN_TARGETS = {
+    "ProjectCode": ["Project Code Revenue Report"],
+    "Client": ["Client"],
+    "ClientSSC": ["Client (With SSC)"],
+    "Service": ["Service"],
+    "Month": ["Month"],
+    "Quarter": ["Quater", "Quarter"],
+    "ExamNameDate": ["Exam Name & Date", "Exam Name"],
+    "ProjectStatus": ["Project Status"],
+    "InvoiceStatus": ["Invoice Status"],
+    "ReviewInvoice": ["Review Based on Invoice (Raised/Pending)"],
+    "BillingType": ["Billing Type"],
+    "BillingStatus": ["Biling Status", "Billing Status"],
+    "Revenue": ["Revenue"],
+    "Margin": ["Margin Amount Based On Overall Subtotal"],
+    "MarginPct": ["Margin % - Overall Subtotal", "Margin Percentage Based On Overall Subtotal"],
+    "MarginPctOps": ["Margin % - Overall Subtotal-OPs"],
+    "BioFriDimensioning": ["BIO & Fri Dimensioning", "Bio & Fri Dimensioning"],
+}
+
+
+def resolve_columns(df: pd.DataFrame):
+    """Returns {logical_name: actual_sheet_column_or_None}."""
+    resolved = {}
+    for logical, candidates in COLUMN_TARGETS.items():
+        found = None
+        for cand in candidates:
+            found = find_col(df, cand)
+            if found:
+                break
+        resolved[logical] = found
+    return resolved
+
+
+NUMERIC_FIELDS = {"Revenue", "Margin", "MarginPct", "MarginPctOps"}
+
+
+def prepare_data(raw: pd.DataFrame):
     df = raw.copy()
-    for c in REQUIRED_COLS:
-        if c not in df.columns:
-            df[c] = None
+    cols = resolve_columns(df)
 
-    for c in ["Revenue", "Margin Amount Based On Overall Subtotal", "Margin Percentage Based On Overall Subtotal"]:
-        df[c] = clean_numeric(df[c])
+    # Clean numeric fields where the source column exists
+    for logical in NUMERIC_FIELDS:
+        src = cols.get(logical)
+        if src:
+            df[src] = clean_numeric(df[src])
+
+    revenue_col = cols.get("Revenue")
+    margin_col = cols.get("Margin")
+    marginpct_col = cols.get("MarginPct")
 
     # Fallback margin % if blank but revenue+margin amount present
-    mask = df["Margin Percentage Based On Overall Subtotal"].isna() & df["Revenue"].notna() & (df["Revenue"] != 0)
-    df.loc[mask, "Margin Percentage Based On Overall Subtotal"] = (
-        df.loc[mask, "Margin Amount Based On Overall Subtotal"] / df.loc[mask, "Revenue"] * 100
-    )
-    # Where revenue is 0/blank, force margin% to 0 to avoid inf/NaN in charts
-    zero_rev_mask = df["Revenue"].isna() | (df["Revenue"] == 0)
-    df.loc[zero_rev_mask, "Margin Percentage Based On Overall Subtotal"] = df.loc[
-        zero_rev_mask, "Margin Percentage Based On Overall Subtotal"
-    ].fillna(0)
+    if revenue_col and margin_col and marginpct_col:
+        mask = df[marginpct_col].isna() & df[revenue_col].notna() & (df[revenue_col] != 0)
+        df.loc[mask, marginpct_col] = df.loc[mask, margin_col] / df.loc[mask, revenue_col] * 100
+        zero_rev_mask = df[revenue_col].isna() | (df[revenue_col] == 0)
+        df.loc[zero_rev_mask, marginpct_col] = df.loc[zero_rev_mask, marginpct_col].fillna(0)
 
-    df["Month"] = df["Month"].astype(str).str.strip()
-    df["Client"] = df["Client"].astype(str).str.strip()
-    df["Service"] = df["Service"].astype(str).str.strip()
+    client_col = cols.get("Client")
+    if client_col:
+        df[client_col] = df[client_col].astype(str).str.strip()
+    if cols.get("Service"):
+        df[cols["Service"]] = df[cols["Service"]].astype(str).str.strip()
+    if cols.get("Month"):
+        df[cols["Month"]] = df[cols["Month"]].astype(str).str.strip()
 
-    # Drop fully blank rows
-    df = df[~((df["Client"].isin(["", "nan", "None"])) & df["Revenue"].isna())]
+    # Drop fully blank rows (no client, no revenue)
+    if client_col and revenue_col:
+        df = df[~((df[client_col].isin(["", "nan", "None"])) & df[revenue_col].isna())]
 
-    # ProjectCode: prefer sheet column, else build a fallback
-    pc = df["Project Code Revenue Report"].astype(str).str.strip()
-    fallback = (df["Client"] + "/" + df["Exam Name"].astype(str) + "/" + df["Service"]).str.replace(" ", "", regex=False)
-    df["ProjectCode"] = pc.where(~pc.isin(["", "nan", "None"]), fallback)
+    # ProjectCode fallback if the sheet column is missing/blank
+    pc_col = cols.get("ProjectCode")
+    exam_col = cols.get("ExamNameDate")
+    service_col = cols.get("Service")
+    if pc_col:
+        pc = df[pc_col].astype(str).str.strip()
+    else:
+        pc = pd.Series([""] * len(df), index=df.index)
+    fallback_parts = []
+    if client_col:
+        fallback_parts.append(df[client_col].astype(str))
+    if exam_col:
+        fallback_parts.append(df[exam_col].astype(str))
+    if service_col:
+        fallback_parts.append(df[service_col].astype(str))
+    if fallback_parts:
+        fallback = fallback_parts[0]
+        for part in fallback_parts[1:]:
+            fallback = fallback + "/" + part
+        fallback = fallback.str.replace(" ", "", regex=False)
+    else:
+        fallback = pd.Series([f"ROW{i}" for i in range(len(df))], index=df.index)
+    df["_ProjectCode"] = pc.where(~pc.isin(["", "nan", "None"]), fallback)
 
-    # Invoice status: prefer the review column, else Invoice Status
-    review = df["Review Based on Invoice (Raised/Pending)"].astype(str).str.strip()
-    invstat = df["Invoice Status"].astype(str).str.strip()
-    df["InvoiceStatusFinal"] = review.where(~review.isin(["", "nan", "None"]), invstat)
-
-    return df
+    return df, cols
 
 
 def month_sort_key(m: str):
@@ -127,74 +187,40 @@ def month_sort_key(m: str):
         return datetime.max
 
 
-def build_dashboard_json(df: pd.DataFrame):
-    # ---- monthly ----
-    monthly_g = df.groupby("Month", as_index=False).agg(
-        Revenue=("Revenue", "sum"),
-        Margin=("Margin Amount Based On Overall Subtotal", "sum"),
-        Projects=("Month", "count"),
-    )
-    monthly_g["MarginPct"] = (monthly_g["Margin"] / monthly_g["Revenue"] * 100).where(monthly_g["Revenue"] != 0, 0)
-    monthly_g = monthly_g.sort_values("Month", key=lambda s: s.map(month_sort_key))
-    monthly = monthly_g.to_dict("records")
+def _series_or_blank(df, cols, logical, length):
+    col = cols.get(logical)
+    if col:
+        return df[col].fillna("").astype(str)
+    return pd.Series([""] * length, index=df.index)
 
-    # ---- client ----
-    client_g = df.groupby("Client", as_index=False).agg(
-        Revenue=("Revenue", "sum"),
-        Margin=("Margin Amount Based On Overall Subtotal", "sum"),
-        Projects=("Client", "count"),
-    )
-    client_g["MarginPct"] = (client_g["Margin"] / client_g["Revenue"] * 100).where(client_g["Revenue"] != 0, 0)
-    client = client_g.to_dict("records")
 
-    # ---- service ----
-    service_g = df.groupby("Service", as_index=False).agg(
-        Revenue=("Revenue", "sum"),
-        Margin=("Margin Amount Based On Overall Subtotal", "sum"),
-        Projects=("Service", "count"),
-    )
-    service_g["MarginPct"] = (service_g["Margin"] / service_g["Revenue"] * 100).where(service_g["Revenue"] != 0, 0)
-    service = service_g.to_dict("records")
+def build_rows(df: pd.DataFrame, cols: dict):
+    n = len(df)
+    revenue = df[cols["Revenue"]] if cols.get("Revenue") else pd.Series([0.0] * n, index=df.index)
+    margin = df[cols["Margin"]] if cols.get("Margin") else pd.Series([0.0] * n, index=df.index)
+    marginpct = df[cols["MarginPct"]] if cols.get("MarginPct") else pd.Series([0.0] * n, index=df.index)
+    marginpct_ops = df[cols["MarginPctOps"]] if cols.get("MarginPctOps") else pd.Series([None] * n, index=df.index)
 
-    # ---- project status ----
-    pstatus_g = df.groupby("Project Status", as_index=False).agg(
-        Revenue=("Revenue", "sum"), Count=("Project Status", "count")
-    )
-    pstatus_g = pstatus_g.rename(columns={"Project Status": "Project Status"})
-    pstatus = [{"Project Status": r["Project Status"], "Revenue": r["Revenue"], "Count": r["Count"]}
-               for r in pstatus_g.to_dict("records")]
-
-    # ---- invoice status ----
-    istatus_g = df.groupby("InvoiceStatusFinal", as_index=False).size()
-    istatus = [{"Invoice Status": r["InvoiceStatusFinal"], "Count": r["size"]} for r in istatus_g.to_dict("records")]
-
-    # ---- scatter (row level, for bubble chart + KPI averages) ----
-    scatter_df = df[["Client", "Exam Name", "Revenue", "Margin Percentage Based On Overall Subtotal", "Month", "Service"]].copy()
-    scatter_df = scatter_df.rename(columns={"Margin Percentage Based On Overall Subtotal": "MarginPct"})
-    scatter_df = scatter_df.dropna(subset=["Revenue"])
-    scatter = scatter_df.to_dict("records")
-
-    data_obj = {
-        "monthly": monthly,
-        "client": client,
-        "service": service,
-        "pstatus": pstatus,
-        "istatus": istatus,
-        "scatter": scatter,
-    }
-
-    # ---- project-level rows (Project-wise tab) ----
-    proj_df = df[["ProjectCode", "Client", "Service", "Month", "Revenue",
-                  "Margin Amount Based On Overall Subtotal", "Margin Percentage Based On Overall Subtotal"]].copy()
-    proj_df = proj_df.rename(columns={
-        "Margin Amount Based On Overall Subtotal": "Margin",
-        "Margin Percentage Based On Overall Subtotal": "MarginPct",
+    out = pd.DataFrame({
+        "projectCode": df["_ProjectCode"],
+        "client": _series_or_blank(df, cols, "Client", n),
+        "clientSSC": _series_or_blank(df, cols, "ClientSSC", n),
+        "service": _series_or_blank(df, cols, "Service", n),
+        "month": _series_or_blank(df, cols, "Month", n),
+        "quarter": _series_or_blank(df, cols, "Quarter", n),
+        "examNameDate": _series_or_blank(df, cols, "ExamNameDate", n),
+        "projectStatus": _series_or_blank(df, cols, "ProjectStatus", n),
+        "invoiceStatus": _series_or_blank(df, cols, "InvoiceStatus", n),
+        "reviewInvoice": _series_or_blank(df, cols, "ReviewInvoice", n),
+        "billingType": _series_or_blank(df, cols, "BillingType", n),
+        "billingStatus": _series_or_blank(df, cols, "BillingStatus", n),
+        "bioFriDimensioning": _series_or_blank(df, cols, "BioFriDimensioning", n),
+        "revenue": revenue.fillna(0),
+        "margin": margin.fillna(0),
+        "marginPct": marginpct.fillna(0),
+        "marginPctOps": marginpct_ops,
     })
-    proj_df = proj_df.dropna(subset=["Margin"])
-    proj_df = proj_df.sort_values("Margin")
-    project_data = proj_df.to_dict("records")
-
-    return data_obj, project_data
+    return out.to_dict("records")
 
 
 # ----------------------------------------------------------------------
@@ -202,25 +228,28 @@ def build_dashboard_json(df: pd.DataFrame):
 # ----------------------------------------------------------------------
 try:
     raw_df = load_raw_data(sheet_id, sheet_name)
-    df = prepare_data(raw_df)
+    prepared_df, resolved_cols = prepare_data(raw_df)
 except Exception as e:
     st.error(f"Sheet load nahi ho payi. Sharing settings aur tab name check karo. Error: {e}")
     st.stop()
 
-if df.empty:
+if prepared_df.empty:
     st.warning("Sheet se koi valid row nahi mili. Column headers check karo.")
     st.stop()
 
-data_obj, project_data = build_dashboard_json(df)
+rows = build_rows(prepared_df, resolved_cols)
 
-months_present = sorted(df["Month"].dropna().unique().tolist(), key=month_sort_key)
+months_present = sorted(
+    {r["month"] for r in rows if r["month"]},
+    key=month_sort_key,
+)
 period_label = f"{months_present[0]} – {months_present[-1]}" if months_present else ""
 
 template_html = TEMPLATE_PATH.read_text(encoding="utf-8")
 final_html = (
     template_html
-    .replace("__DATA_JSON__", json.dumps(data_obj, default=str))
-    .replace("__PROJECT_JSON__", json.dumps(project_data, default=str))
+    .replace("__ROWS_JSON__", json.dumps(rows, default=str))
+    .replace("__MONTH_ORDER_JSON__", json.dumps(months_present, default=str))
     .replace("__PERIOD_LABEL__", period_label)
 )
 
