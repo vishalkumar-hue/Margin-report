@@ -56,6 +56,11 @@
     background:var(--panel-2); color:var(--text); border:1px solid var(--border);
     border-radius:6px; padding:7px 10px; font-size:13px; max-width:220px;
   }
+  .filters input[type=text]{
+    background:var(--panel-2); color:var(--text); border:1px solid var(--border);
+    border-radius:6px; padding:7px 10px; font-size:13px; width:170px;
+  }
+  .filters input[type=text]::placeholder{color:var(--muted); opacity:0.7;}
   .filter-bar-wrap{
     border:1px solid var(--border); border-radius:10px; background:var(--panel);
     padding:14px 16px 6px; margin-bottom:20px;
@@ -261,7 +266,6 @@ const FILTER_DEFS = [
   {key:'quarter', label:'Quarter', field:'quarter'},
   {key:'service', label:'Service', field:'service'},
   {key:'client', label:'Client', field:'client'},
-  {key:'clientSSC', label:'Client (With SSC)', field:'clientSSC'},
   {key:'examNameDate', label:'Exam Name & Date', field:'examNameDate'},
   {key:'invoiceStatus', label:'Invoice Status', field:'invoiceStatus'},
   {key:'reviewInvoice', label:'Review (Raised/Pending)', field:'reviewInvoice'},
@@ -272,7 +276,7 @@ const FILTER_DEFS = [
 ];
 
 const activeFilters = {};
-FILTER_DEFS.forEach(f => activeFilters[f.key] = 'all');
+FILTER_DEFS.forEach(f => activeFilters[f.key] = '');
 
 function uniqueValues(field, order){
   const vals = Array.from(new Set(ROWS.map(r => r[field]).filter(v => v !== null && v !== undefined && v !== '')));
@@ -285,6 +289,11 @@ function uniqueValues(field, order){
   return vals;
 }
 
+function triggerFilterChange(){
+  renderAll();
+  if (document.getElementById('tab-projects').classList.contains('active')) renderProjectTab();
+}
+
 function buildFilterBar(){
   const bar = document.getElementById('filterBar');
   bar.innerHTML = '';
@@ -292,41 +301,47 @@ function buildFilterBar(){
     const wrap = document.createElement('div');
     const label = document.createElement('label');
     label.textContent = f.label;
-    const select = document.createElement('select');
-    select.id = 'filter_' + f.key;
-    const optAll = document.createElement('option');
-    optAll.value = 'all'; optAll.textContent = 'All';
-    select.appendChild(optAll);
+    const input = document.createElement('input');
+    input.type = 'text';
+    input.id = 'filter_' + f.key;
+    input.setAttribute('list', 'datalist_' + f.key);
+    input.setAttribute('placeholder', 'Search / select...');
+    input.autocomplete = 'off';
+
+    const datalist = document.createElement('datalist');
+    datalist.id = 'datalist_' + f.key;
     uniqueValues(f.field, f.order).forEach(v => {
       const o = document.createElement('option');
-      o.value = v; o.textContent = v;
-      select.appendChild(o);
+      o.value = v;
+      datalist.appendChild(o);
     });
-    select.addEventListener('change', e => {
-      activeFilters[f.key] = e.target.value;
-      renderAll();
-      if (document.getElementById('tab-projects').classList.contains('active')) renderProjectTab();
+
+    input.addEventListener('input', e => {
+      activeFilters[f.key] = e.target.value.trim();
+      triggerFilterChange();
     });
+
     wrap.appendChild(label);
-    wrap.appendChild(select);
+    wrap.appendChild(input);
+    wrap.appendChild(datalist);
     bar.appendChild(wrap);
   });
 }
 
 document.getElementById('clearFiltersBtn').addEventListener('click', () => {
   FILTER_DEFS.forEach(f => {
-    activeFilters[f.key] = 'all';
-    const sel = document.getElementById('filter_' + f.key);
-    if (sel) sel.value = 'all';
+    activeFilters[f.key] = '';
+    const inp = document.getElementById('filter_' + f.key);
+    if (inp) inp.value = '';
   });
-  renderAll();
-  if (document.getElementById('tab-projects').classList.contains('active')) renderProjectTab();
+  triggerFilterChange();
 });
 
 function rowMatches(row){
   return FILTER_DEFS.every(f => {
     const v = activeFilters[f.key];
-    return v === 'all' || v === undefined || String(row[f.field]) === String(v);
+    if (!v) return true;
+    return String(row[f.field] ?? '').toLowerCase().includes(v.toLowerCase());
   });
 }
 
