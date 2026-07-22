@@ -27,7 +27,7 @@ st.markdown("""
 .stApp{background:#0b1220;}
 [data-testid="collapsedControl"]{display:none;}
 section[data-testid="stSidebar"]{display:none;}
-div.block-container{padding-top:1rem;}
+div.block-container{padding-top:3.5rem;}
 div.stButton > button{
   background:#17233a; color:#e7ecf5; border:1px solid #223252; border-radius:6px;
 }
