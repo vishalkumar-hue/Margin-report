@@ -347,14 +347,6 @@ if prepared_df.empty:
 
 rows = build_rows(prepared_df, resolved_cols)
 
-with st.expander("🔧 Debug: sheet columns & field mapping (check here if a column isn't showing data)", expanded=True):
-    st.write("**Raw column names found in the Google Sheet ('Raw Data' tab):**")
-    st.code("\n".join(f"{i}: {c}" for i, c in enumerate(raw_df.columns.tolist())))
-    st.write("**Manual position overrides currently active:**")
-    st.json({k: v for k, v in MANUAL_COLUMN_OVERRIDES.items() if v})
-    st.write("**How each dashboard field mapped to a sheet column:**")
-    st.json({k: (v if v else "⚠️ NOT FOUND") for k, v in resolved_cols.items()})
-
 months_present = sorted(
     {r["month"] for r in rows if r["month"]},
     key=month_sort_key,
