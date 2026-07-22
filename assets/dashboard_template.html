@@ -160,6 +160,28 @@
   .pill.mid{background:rgba(217,164,65,0.15); color:var(--gold);}
   .live-dot{display:inline-block; width:8px; height:8px; border-radius:50%; background:var(--teal); margin-right:6px; box-shadow:0 0 6px var(--teal); animation:pulse 1.6s infinite;}
   @keyframes pulse{0%{opacity:1;}50%{opacity:0.35;}100%{opacity:1;}}
+  /* ---- Alerts & Targets panel (Overview tab) ---- */
+  .target-input{display:flex; align-items:center; gap:8px; margin-bottom:12px; flex-wrap:wrap;}
+  .target-input label{font-size:12px; color:var(--muted);}
+  .target-input input[type=number]{
+    width:70px; background:var(--panel-2); color:var(--text); border:1px solid var(--border);
+    border-radius:6px; padding:6px 8px; font-size:13px;
+  }
+  .alert-item{
+    padding:8px 10px; border-radius:6px; font-size:12.5px; margin-bottom:6px;
+    background:rgba(255,255,255,0.03);
+  }
+  .alert-item.bad{background:rgba(224,102,95,0.10); color:var(--coral);}
+  .alert-item.good{background:rgba(51,184,168,0.10); color:var(--teal);}
+  .alert-item[data-drill]{cursor:pointer;}
+  .alert-item[data-drill]:hover{background:rgba(255,255,255,0.07);}
+  /* ---- Comparison tab ---- */
+  .cmp-controls select{
+    background:var(--panel-2); color:var(--text); border:1px solid var(--border);
+    border-radius:6px; padding:7px 10px; font-size:13px;
+  }
+  .cmp-controls label{font-size:11.5px; color:var(--muted); display:block; margin-bottom:4px;}
+  .cmp-controls .cmp-field{display:flex; flex-direction:column;}
   @media (max-width: 980px){
     .kpis{grid-template-columns:repeat(2,1fr);}
     .grid, .grid3{grid-template-columns:1fr;}
@@ -190,12 +212,23 @@
     <button class="tabbtn" data-tab="clients">Client Analysis</button>
     <button class="tabbtn" data-tab="services">Service Analysis</button>
     <button class="tabbtn" data-tab="status">Status Overview</button>
+    <button class="tabbtn" data-tab="comparison">Comparison</button>
     <button class="tabbtn" data-tab="projects">Project-wise</button>
   </div>
 
   <div id="tab-overview" class="tabpage active">
 
   <div class="kpis" id="kpiRow"></div>
+
+  <div class="card">
+    <h3>Alerts &amp; Targets <span class="tag">click an alert to drill down</span></h3>
+    <div class="target-input">
+      <label for="marginTargetInput">Margin % Target</label>
+      <input type="number" id="marginTargetInput" value="50" min="0" max="100">
+      <span style="font-size:11.5px; color:var(--muted);">clients / services / months below this get flagged here</span>
+    </div>
+    <div id="alertsList"></div>
+  </div>
 
   <div class="grid">
     <div class="card">
@@ -345,6 +378,39 @@
 
   </div>
 
+  <div id="tab-comparison" class="tabpage">
+
+  <div class="card">
+    <h3>Comparison Mode <span class="tag">month vs month, client vs client, service vs service</span></h3>
+    <div class="search-row cmp-controls">
+      <div class="cmp-field">
+        <label for="cmpDimension">Compare by</label>
+        <select id="cmpDimension">
+          <option value="month">Month</option>
+          <option value="client">Client</option>
+          <option value="service">Service</option>
+        </select>
+      </div>
+      <div class="cmp-field">
+        <label for="cmpA">Group A</label>
+        <select id="cmpA"></select>
+      </div>
+      <div class="cmp-field">
+        <label for="cmpB">Group B</label>
+        <select id="cmpB"></select>
+      </div>
+    </div>
+  </div>
+
+  <div class="kpis" id="cmpKpiRow"></div>
+
+  <div class="card">
+    <h3>Side-by-Side <span class="tag">revenue, margin, margin %, projects</span></h3>
+    <div class="chart-box tall"><canvas id="cmpChart"></canvas></div>
+  </div>
+
+  </div>
+
   <div id="tab-projects" class="tabpage">
 
   <div class="kpis" id="projKpiRow"></div>
@@ -420,6 +486,7 @@ const FILTER_DEFS = [
   {key:'service', label:'Service', field:'service'},
   {key:'client', label:'Client', field:'client'},
   {key:'projectCode', label:'Project Code', field:'projectCode'},
+  {key:'projectStatus', label:'Project Status', field:'projectStatus'},
   {key:'invoiceStatus', label:'Invoice Status', field:'invoiceStatus'},
   {key:'reviewInvoice', label:'Review (Raised/Pending)', field:'reviewInvoice'},
   {key:'billingType', label:'Billing Type', field:'billingType'},
@@ -463,6 +530,7 @@ function renderTab(tabId){
   else if (tabId === 'tab-clients') renderClientsTab();
   else if (tabId === 'tab-services') renderServicesTab();
   else if (tabId === 'tab-status') renderStatusTab();
+  else if (tabId === 'tab-comparison') populateCmpSelects();
   else if (tabId === 'tab-projects') renderProjectTab();
 }
 
@@ -590,6 +658,22 @@ function getFilteredRows(){
   return ROWS.filter(rowMatches);
 }
 
+// drillFilter: sets a single exact-match filter (used when the person clicks
+// a bar/segment on any chart, or an Alerts list item) and jumps to the
+// Project-wise tab so the underlying rows are immediately visible.
+function drillFilter(key, value){
+  if (value === undefined || value === null || value === '') return;
+  activeFilters[key] = new Set([value]);
+  const listEl = document.querySelector('#mspanel_' + key + ' .ms-list');
+  const btn = document.getElementById('msbtn_' + key);
+  if (listEl){
+    listEl.querySelectorAll('input[type=checkbox]').forEach(c => { c.checked = (c.value === value); });
+  }
+  if (btn){ btn.textContent = value; btn.classList.add('active'); }
+  const projBtn = document.querySelector('.tabbtn[data-tab="projects"]');
+  if (projBtn) projBtn.click();
+}
+
 // ---------------- Client-side aggregation from row-level data ----------------
 // aggregateBy: groups rows by a field and sums Revenue/Margin/Projects,
 // then derives MarginPct per group. Used for client/service/month charts.
@@ -694,7 +778,8 @@ function renderTrend(){
         y:{position:'left', grid:{color:'rgba(255,255,255,0.06)'}, title:{display:true,text:'₹ Cr'}},
         y1:{position:'right', grid:{display:false}, title:{display:true,text:'Margin %'}, min:0}
       },
-      plugins:{legend:{position:'bottom', labels:{boxWidth:12}}}
+      plugins:{legend:{position:'bottom', labels:{boxWidth:12}}},
+      onClick:(evt, elements)=>{ if(elements.length) drillFilter('month', labels[elements[0].index]); }
     }
   });
 }
@@ -705,13 +790,17 @@ function renderStatus(){
   const ctx = document.getElementById('statusChart');
   const rows = getFilteredRows();
   const agg = aggregateCount(rows, 'projectStatus');
+  const labels = agg.map(p=>p.key);
   charts.status = new Chart(ctx, {
     type:'doughnut',
     data:{
-      labels: agg.map(p=>p.key),
+      labels,
       datasets:[{data: agg.map(p=>p.Count), backgroundColor: PALETTE, borderWidth:2, borderColor:'#121b2e'}]
     },
-    options:{responsive:true, maintainAspectRatio:false, plugins:{legend:{position:'bottom'}}}
+    options:{
+      responsive:true, maintainAspectRatio:false, plugins:{legend:{position:'bottom'}},
+      onClick:(evt, elements)=>{ if(elements.length) drillFilter('projectStatus', labels[elements[0].index]); }
+    }
   });
 }
 
@@ -722,6 +811,7 @@ function renderClient(){
   const rows = getFilteredRows();
   const agg = aggregateBy(rows, 'client');
   const top = [...agg].sort((a,b)=>b.Revenue-a.Revenue).slice(0,10);
+  const rawKeys = top.map(c=>c.key);
   charts.client = new Chart(ctx, {
     type:'bar',
     data:{
@@ -731,7 +821,8 @@ function renderClient(){
     options:{
       indexAxis:'y', responsive:true, maintainAspectRatio:false,
       plugins:{legend:{display:false}},
-      scales:{x:{title:{display:true, text:'₹ Cr'}}}
+      scales:{x:{title:{display:true, text:'₹ Cr'}}},
+      onClick:(evt, elements)=>{ if(elements.length) drillFilter('client', rawKeys[elements[0].index]); }
     }
   });
 }
@@ -742,16 +833,18 @@ function renderService(){
   const ctx = document.getElementById('serviceChart');
   const rows = getFilteredRows();
   const agg = [...aggregateBy(rows, 'service')].sort((a,b)=>b.MarginPct-a.MarginPct);
+  const labels = agg.map(s=>s.key);
   charts.service = new Chart(ctx, {
     type:'bar',
     data:{
-      labels: agg.map(s=>s.key),
+      labels,
       datasets:[{label:'Margin %', data: agg.map(s=>s.MarginPct), backgroundColor: agg.map(s=> s.MarginPct<0? COLORS.coral : PALETTE[1]), borderRadius:5}]
     },
     options:{
       responsive:true, maintainAspectRatio:false,
       plugins:{legend:{display:false}},
-      scales:{x:{ticks:{autoSkip:false, maxRotation:45, minRotation:30}}, y:{title:{display:true,text:'%'}}}
+      scales:{x:{ticks:{autoSkip:false, maxRotation:45, minRotation:30}}, y:{title:{display:true,text:'%'}}},
+      onClick:(evt, elements)=>{ if(elements.length) drillFilter('service', labels[elements[0].index]); }
     }
   });
 }
@@ -782,13 +875,67 @@ function renderInvoice(){
   const ctx = document.getElementById('invoiceChart');
   const rows = getFilteredRows();
   const agg = aggregateCount(rows, 'reviewInvoice');
+  const labels = agg.map(i=>i.key);
   charts.invoice = new Chart(ctx, {
     type:'pie',
     data:{
-      labels: agg.map(i=>i.key),
+      labels,
       datasets:[{data: agg.map(i=>i.Count), backgroundColor:[COLORS.teal, COLORS.gold, COLORS.coral, COLORS.violet], borderWidth:2, borderColor:'#121b2e'}]
     },
-    options:{responsive:true, maintainAspectRatio:false, plugins:{legend:{position:'bottom'}}}
+    options:{
+      responsive:true, maintainAspectRatio:false, plugins:{legend:{position:'bottom'}},
+      onClick:(evt, elements)=>{ if(elements.length) drillFilter('reviewInvoice', labels[elements[0].index]); }
+    }
+  });
+}
+
+// renderAlerts: "Alerts & Targets" panel on the Overview tab. Flags any
+// client / service / month whose Margin % is below the target the user set
+// (default 50%), plus a headline count of projects currently at negative
+// margin. Clicking a flagged item drills straight into the Project-wise tab.
+function renderAlerts(){
+  const listEl = document.getElementById('alertsList');
+  if (!listEl) return;
+  const rows = getFilteredRows();
+  const targetInput = document.getElementById('marginTargetInput');
+  const target = targetInput ? (parseFloat(targetInput.value) || 0) : 50;
+
+  const items = [];
+
+  const negCount = rows.filter(r => (r.margin||0) < 0).length;
+  if (negCount > 0){
+    items.push({text: negCount + ' project(s) are currently running at a NEGATIVE margin', cls:'bad'});
+  }
+
+  const clientAgg = [...aggregateBy(rows, 'client')].filter(c=>c.MarginPct < target).sort((a,b)=>a.MarginPct-b.MarginPct).slice(0,5);
+  clientAgg.forEach(c=>{
+    items.push({text: c.key + ' — margin ' + c.MarginPct.toFixed(1) + '% is below the ' + target + '% target', cls:'bad', drill:{key:'client', value:c.key}});
+  });
+
+  const serviceAgg = [...aggregateBy(rows, 'service')].filter(s=>s.MarginPct < target).sort((a,b)=>a.MarginPct-b.MarginPct).slice(0,5);
+  serviceAgg.forEach(s=>{
+    items.push({text: s.key + ' (service) — margin ' + s.MarginPct.toFixed(1) + '% is below the ' + target + '% target', cls:'bad', drill:{key:'service', value:s.key}});
+  });
+
+  const monthAgg = [...aggregateBy(rows, 'month')].filter(m=>m.MarginPct < target).sort((a,b)=>a.MarginPct-b.MarginPct);
+  monthAgg.forEach(m=>{
+    items.push({text: m.key + ' (month) — margin ' + m.MarginPct.toFixed(1) + '% is below the ' + target + '% target', cls:'bad', drill:{key:'month', value:m.key}});
+  });
+
+  listEl.innerHTML = '';
+  if (items.length === 0){
+    listEl.innerHTML = '<div class="alert-item good">All clear — nothing below target right now.</div>';
+    return;
+  }
+  items.forEach(it=>{
+    const div = document.createElement('div');
+    div.className = 'alert-item ' + (it.cls||'');
+    div.textContent = it.text;
+    if (it.drill){
+      div.setAttribute('data-drill','1');
+      div.addEventListener('click', ()=> drillFilter(it.drill.key, it.drill.value));
+    }
+    listEl.appendChild(div);
   });
 }
 
@@ -810,6 +957,7 @@ function renderTable(){
 // renderAll: redraws every widget on the Overview tab (called whenever filters change).
 function renderAll(){
   renderKPIs();
+  renderAlerts();
   renderTrend();
   renderStatus();
   renderClient();
@@ -820,21 +968,50 @@ function renderAll(){
 }
 
 // ---------------- Monthly Trend tab (mirrors Excel "Monthly Trend" sheet) ----------------
+
+// forecastGrowth: projects the next value for an absolute field (Revenue/Margin)
+// using the average month-over-month growth rate of the last up-to-3 months.
+// Simple and transparent on purpose - no external forecasting library needed.
+function forecastGrowth(agg, field){
+  if (agg.length < 2) return null;
+  const recent = agg.slice(-Math.min(3, agg.length));
+  const growths = [];
+  for (let i=1; i<recent.length; i++){
+    const prev = recent[i-1][field], curr = recent[i][field];
+    if (prev) growths.push((curr-prev)/prev);
+  }
+  const avgGrowth = growths.length ? growths.reduce((a,b)=>a+b,0)/growths.length : 0;
+  return recent[recent.length-1][field] * (1+avgGrowth);
+}
+
+// forecastAverage: projects the next value for a ratio field (Margin %) as the
+// simple average of the last up-to-3 months, which is more stable than
+// compounding a growth rate on a percentage.
+function forecastAverage(agg, field){
+  if (!agg.length) return null;
+  const recent = agg.slice(-Math.min(3, agg.length));
+  return recent.reduce((a,b)=>a+b[field],0)/recent.length;
+}
+
 function renderMonthlyKPIs(agg){
   const row = document.getElementById('monthlyKpiRow');
   row.innerHTML = '';
   const totalRevenue = agg.reduce((a,b)=>a+b.Revenue,0);
   const totalMargin = agg.reduce((a,b)=>a+b.Margin,0);
   const bestMonth = agg.length ? [...agg].sort((a,b)=>b.MarginPct-a.MarginPct)[0] : null;
+  const projRevenue = forecastGrowth(agg, 'Revenue');
+  const projMarginPct = forecastAverage(agg, 'MarginPct');
   const items = [
     {label:'Total Revenue', value: fmtCr(totalRevenue)},
     {label:'Total Margin', value: fmtCr(totalMargin)},
     {label:'Months in View', value: fmtNum(agg.length)},
     {label:'Best Margin % Month', value: bestMonth ? bestMonth.key : '-'},
+    {label:'Projected Next Month Revenue', value: projRevenue===null ? '-' : fmtCr(projRevenue), delta:'trend-based estimate', cls:''},
+    {label:'Projected Next Month Margin %', value: projMarginPct===null ? '-' : projMarginPct.toFixed(1)+'%', delta:'avg of last 3 months', cls:''},
   ];
   items.forEach(it=>{
     const div = document.createElement('div'); div.className='kpi';
-    div.innerHTML = `<div class="label">${it.label}</div><div class="value">${it.value}</div>`;
+    div.innerHTML = `<div class="label">${it.label}</div><div class="value">${it.value}</div>` + (it.delta?`<div class="delta">${it.delta}</div>`:'');
     row.appendChild(div);
   });
 }
@@ -842,9 +1019,10 @@ function renderMonthlyKPIs(agg){
 function renderMonthlyChart(agg){
   destroy('monthly');
   const ctx = document.getElementById('monthlyChart');
+  const labels = agg.map(m=>m.key);
   charts.monthly = new Chart(ctx, {
     data:{
-      labels: agg.map(m=>m.key),
+      labels,
       datasets:[
         {type:'bar', label:'Revenue (Cr)', data: agg.map(m=>+(m.Revenue/1e7).toFixed(2)), backgroundColor:'rgba(79,139,208,0.55)', borderRadius:5, yAxisID:'y'},
         {type:'bar', label:'Margin (Cr)', data: agg.map(m=>+(m.Margin/1e7).toFixed(2)), backgroundColor:'rgba(217,164,65,0.7)', borderRadius:5, yAxisID:'y'},
@@ -858,7 +1036,8 @@ function renderMonthlyChart(agg){
         y:{position:'left', grid:{color:'rgba(255,255,255,0.06)'}, title:{display:true,text:'₹ Cr'}},
         y1:{position:'right', grid:{display:false}, title:{display:true,text:'Margin %'}, min:0}
       },
-      plugins:{legend:{position:'bottom', labels:{boxWidth:12}}}
+      plugins:{legend:{position:'bottom', labels:{boxWidth:12}}},
+      onClick:(evt, elements)=>{ if(elements.length) drillFilter('month', labels[elements[0].index]); }
     }
   });
 }
@@ -911,6 +1090,7 @@ function renderClientAnalysisChart(agg){
   destroy('clientAnalysis');
   const ctx = document.getElementById('clientAnalysisChart');
   const top = agg.slice(0,15);
+  const rawKeys = top.map(c=>c.key);
   charts.clientAnalysis = new Chart(ctx, {
     type:'bar',
     data:{
@@ -920,7 +1100,8 @@ function renderClientAnalysisChart(agg){
     options:{
       indexAxis:'y', responsive:true, maintainAspectRatio:false,
       plugins:{legend:{display:false}},
-      scales:{x:{title:{display:true, text:'₹ Cr'}}}
+      scales:{x:{title:{display:true, text:'₹ Cr'}}},
+      onClick:(evt, elements)=>{ if(elements.length) drillFilter('client', rawKeys[elements[0].index]); }
     }
   });
 }
@@ -977,10 +1158,11 @@ function renderServicesKPIs(agg){
 function renderServiceAnalysisChart(agg){
   destroy('serviceAnalysis');
   const ctx = document.getElementById('serviceAnalysisChart');
+  const labels = agg.map(s=>s.key);
   charts.serviceAnalysis = new Chart(ctx, {
     type:'bar',
     data:{
-      labels: agg.map(s=>s.key),
+      labels,
       datasets:[
         {label:'Revenue (Cr)', data: agg.map(s=>+(s.Revenue/1e7).toFixed(2)), backgroundColor:'rgba(79,139,208,0.55)', borderRadius:5, yAxisID:'y'},
         {label:'Margin (Cr)', data: agg.map(s=>+(s.Margin/1e7).toFixed(2)), backgroundColor:'rgba(217,164,65,0.7)', borderRadius:5, yAxisID:'y'}
@@ -992,7 +1174,8 @@ function renderServiceAnalysisChart(agg){
       scales:{
         x:{ticks:{autoSkip:false, maxRotation:45, minRotation:30}},
         y:{title:{display:true,text:'₹ Cr'}}
-      }
+      },
+      onClick:(evt, elements)=>{ if(elements.length) drillFilter('service', labels[elements[0].index]); }
     }
   });
 }
@@ -1018,16 +1201,20 @@ function renderServicesTab(){
 }
 
 // ---------------- Status Overview tab (mirrors Excel "Status Overview" sheet) ----------------
-function renderStatusChart(chartId, canvasId, agg){
+function renderStatusChart(chartId, canvasId, agg, filterKey){
   destroy(chartId);
   const ctx = document.getElementById(canvasId);
+  const labels = agg.map(a=>a.key);
   charts[chartId] = new Chart(ctx, {
     type:'doughnut',
     data:{
-      labels: agg.map(a=>a.key),
+      labels,
       datasets:[{data: agg.map(a=>a.Count), backgroundColor: PALETTE, borderWidth:2, borderColor:'#121b2e'}]
     },
-    options:{responsive:true, maintainAspectRatio:false, plugins:{legend:{position:'bottom'}}}
+    options:{
+      responsive:true, maintainAspectRatio:false, plugins:{legend:{position:'bottom'}},
+      onClick:(evt, elements)=>{ if(elements.length && filterKey) drillFilter(filterKey, labels[elements[0].index]); }
+    }
   });
 }
 
@@ -1045,16 +1232,100 @@ function renderStatusTab(){
   const rows = getFilteredRows();
 
   const invoiceAgg = [...aggregateCountRevenue(rows, 'invoiceStatus')].sort((a,b)=>b.Count-a.Count);
-  renderStatusChart('statusInvoice', 'statusInvoiceChart', invoiceAgg);
+  renderStatusChart('statusInvoice', 'statusInvoiceChart', invoiceAgg, 'invoiceStatus');
   renderStatusTable('statusInvoiceTable', invoiceAgg);
 
   const projectAgg = [...aggregateCountRevenue(rows, 'projectStatus')].sort((a,b)=>b.Count-a.Count);
-  renderStatusChart('statusProject', 'statusProjectChart', projectAgg);
+  renderStatusChart('statusProject', 'statusProjectChart', projectAgg, 'projectStatus');
   renderStatusTable('statusProjectTable', projectAgg);
 
   const reviewAgg = [...aggregateCountRevenue(rows, 'reviewInvoice')].sort((a,b)=>b.Count-a.Count);
   renderStatusTable('statusReviewTable', reviewAgg);
 }
+
+// ---------------- Comparison tab (month vs month, client vs client, service vs service) ----------------
+
+// populateCmpSelects: rebuilds Group A / Group B dropdown options whenever the
+// comparison dimension changes or the global filters change, preserving the
+// current selection where it still exists.
+function populateCmpSelects(){
+  const dim = document.getElementById('cmpDimension').value;
+  const rows = getFilteredRows();
+  const agg = aggregateBy(rows, dim);
+  let values = agg.map(a=>a.key);
+  if (dim === 'month'){
+    const idx = new Map(MONTH_ORDER.map((m,i)=>[m,i]));
+    values.sort((a,b)=> (idx.has(a)?idx.get(a):999) - (idx.has(b)?idx.get(b):999));
+  } else {
+    values.sort();
+  }
+  const selA = document.getElementById('cmpA');
+  const selB = document.getElementById('cmpB');
+  const prevA = selA.value, prevB = selB.value;
+  const optionsHtml = values.map(v => `<option value="${v}">${v}</option>`).join('');
+  selA.innerHTML = optionsHtml;
+  selB.innerHTML = optionsHtml;
+  selA.value = values.includes(prevA) ? prevA : (values[0] || '');
+  selB.value = values.includes(prevB) ? prevB : (values.length>1 ? values[1] : (values[0] || ''));
+  renderComparisonTab();
+}
+
+// renderComparisonTab: shows Revenue / Margin / Margin % / Projects for the
+// two selected groups side by side, with a % delta on each KPI.
+function renderComparisonTab(){
+  const dim = document.getElementById('cmpDimension').value;
+  const rows = getFilteredRows();
+  const agg = aggregateBy(rows, dim);
+  const map = new Map(agg.map(a=>[a.key, a]));
+  const aVal = document.getElementById('cmpA').value;
+  const bVal = document.getElementById('cmpB').value;
+  const A = map.get(aVal) || {Revenue:0, Margin:0, MarginPct:0, Projects:0};
+  const B = map.get(bVal) || {Revenue:0, Margin:0, MarginPct:0, Projects:0};
+
+  function pctDelta(a, b){
+    if (!a) return '-';
+    const d = ((b-a)/Math.abs(a))*100;
+    return (d>=0?'+':'') + d.toFixed(1) + '% vs ' + (aVal||'Group A');
+  }
+  function ptsDelta(a, b){
+    const d = b-a;
+    return (d>=0?'+':'') + d.toFixed(1) + ' pts vs ' + (aVal||'Group A');
+  }
+
+  const row = document.getElementById('cmpKpiRow');
+  row.innerHTML = '';
+  const items = [
+    {label:'Revenue — ' + (aVal||'-'), value: fmtCr(A.Revenue)},
+    {label:'Revenue — ' + (bVal||'-'), value: fmtCr(B.Revenue), delta: pctDelta(A.Revenue,B.Revenue), cls: B.Revenue>=A.Revenue?'up':'down'},
+    {label:'Margin % — ' + (aVal||'-'), value: A.MarginPct.toFixed(1)+'%'},
+    {label:'Margin % — ' + (bVal||'-'), value: B.MarginPct.toFixed(1)+'%', delta: ptsDelta(A.MarginPct,B.MarginPct), cls: B.MarginPct>=A.MarginPct?'up':'down'},
+    {label:'Projects — ' + (aVal||'-'), value: fmtNum(A.Projects)},
+    {label:'Projects — ' + (bVal||'-'), value: fmtNum(B.Projects)},
+  ];
+  items.forEach(it=>{
+    const div = document.createElement('div'); div.className='kpi';
+    div.innerHTML = `<div class="label">${it.label}</div><div class="value">${it.value}</div>` + (it.delta?`<div class="delta ${it.cls||''}">${it.delta}</div>`:'');
+    row.appendChild(div);
+  });
+
+  destroy('cmp');
+  const ctx = document.getElementById('cmpChart');
+  charts.cmp = new Chart(ctx, {
+    type:'bar',
+    data:{
+      labels:['Revenue (₹ Cr)','Margin (₹ Cr)','Margin %','Projects'],
+      datasets:[
+        {label: aVal || 'Group A', data:[+(A.Revenue/1e7).toFixed(2), +(A.Margin/1e7).toFixed(2), +A.MarginPct.toFixed(1), A.Projects], backgroundColor: PALETTE[4], borderRadius:5},
+        {label: bVal || 'Group B', data:[+(B.Revenue/1e7).toFixed(2), +(B.Margin/1e7).toFixed(2), +B.MarginPct.toFixed(1), B.Projects], backgroundColor: PALETTE[0], borderRadius:5}
+      ]
+    },
+    options:{responsive:true, maintainAspectRatio:false, plugins:{legend:{position:'bottom'}}}
+  });
+}
+
+document.getElementById('cmpDimension').addEventListener('change', populateCmpSelects);
+document.getElementById('cmpA').addEventListener('change', renderComparisonTab);
+document.getElementById('cmpB').addEventListener('change', renderComparisonTab);
 
 // ---------------- Tab switching ----------------
 document.querySelectorAll('.tabbtn').forEach(btn=>{
@@ -1182,6 +1453,8 @@ document.getElementById('posOnly').addEventListener('change', e=>{
   if(projPosOnly){ projNegOnly = false; document.getElementById('negOnly').checked = false; }
   renderProjectTable();
 });
+
+document.getElementById('marginTargetInput').addEventListener('input', renderAlerts);
 
 // ---- initial page load ----
 buildFilterBar();
