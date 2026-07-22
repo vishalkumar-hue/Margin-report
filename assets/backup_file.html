@@ -1,1 +1,535 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Margin Dashboard</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<style>
+  :root{
+    --bg: #0b1220;
+    --panel: #121b2e;
+    --panel-2: #17233a;
+    --border: #223252;
+    --text: #e7ecf5;
+    --muted: #8ea0c2;
+    --gold: #d9a441;
+    --teal: #33b8a8;
+    --coral: #e0665f;
+    --violet: #8b7ee8;
+    --grid: rgba(255,255,255,0.06);
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0;
+    font-family: 'Segoe UI', Arial, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+  }
+  .wrap{max-width:1320px; margin:0 auto; padding:28px 24px 60px;}
+  .topbar{
+    display:flex; align-items:baseline; justify-content:space-between;
+    border-bottom: 1px solid var(--border);
+    padding-bottom:18px; margin-bottom:22px;
+    flex-wrap:wrap; gap:10px;
+  }
+  .topbar h1{
+    font-size:22px; margin:0; letter-spacing:0.3px; font-weight:700;
+  }
+  .topbar h1 span{color:var(--gold);}
+  .topbar .sub{color:var(--muted); font-size:12.5px; margin-top:4px;}
+  .kpis{
+    display:grid; grid-template-columns:repeat(5,1fr); gap:14px; margin-bottom:22px;
+  }
+  .kpi{
+    background: linear-gradient(160deg, var(--panel), var(--panel-2));
+    border:1px solid var(--border); border-radius:10px; padding:16px 18px;
+  }
+  .kpi .label{font-size:11px; color:var(--muted); text-transform:uppercase; letter-spacing:0.6px;}
+  .kpi .value{font-size:22px; font-weight:700; margin-top:6px;}
+  .kpi .delta{font-size:11.5px; margin-top:4px;}
+  .up{color:var(--teal);} .down{color:var(--coral);}
+  .filters{
+    display:flex; gap:10px; margin-bottom:20px; flex-wrap:wrap; align-items:center;
+  }
+  .filters label{font-size:11.5px; color:var(--muted); margin-right:6px;}
+  select{
+    background:var(--panel-2); color:var(--text); border:1px solid var(--border);
+    border-radius:6px; padding:7px 10px; font-size:13px;
+  }
+  .tabbar{
+    display:flex; gap:6px; margin-bottom:22px; border-bottom:1px solid var(--border);
+  }
+  .tabbtn{
+    background:transparent; border:none; color:var(--muted); font-size:13.5px; font-weight:600;
+    padding:10px 16px; cursor:pointer; border-bottom:2px solid transparent; font-family:inherit;
+  }
+  .tabbtn:hover{color:var(--text);}
+  .tabbtn.active{color:var(--gold); border-bottom:2px solid var(--gold);}
+  .tabpage{display:none;}
+  .tabpage.active{display:block;}
+  .search-row{display:flex; gap:10px; margin-bottom:14px; align-items:center; flex-wrap:wrap;}
+  .search-row input[type=text]{
+    background:var(--panel-2); color:var(--text); border:1px solid var(--border);
+    border-radius:6px; padding:7px 10px; font-size:13px; min-width:220px;
+  }
+  .badge{padding:2px 9px; border-radius:20px; font-size:11px; font-weight:700;}
+  .badge.neg{background:rgba(224,102,95,0.18); color:var(--coral);}
+  .badge.pos{background:rgba(51,184,168,0.18); color:var(--teal);}
+  tr.row-neg td{background:rgba(224,102,95,0.07);}
+  tr.row-pos td{background:transparent;}
+  .scroll-table{max-height:560px; overflow-y:auto;}
+  .scroll-table table{position:relative;}
+  .scroll-table thead th{position:sticky; top:0; background:var(--panel); z-index:1;}
+  .grid{
+    display:grid; grid-template-columns: 1.3fr 1fr; gap:16px; margin-bottom:16px;
+  }
+  .grid3{ display:grid; grid-template-columns: 1fr 1fr 1fr; gap:16px; margin-bottom:16px;}
+  .card{
+    background: var(--panel); border:1px solid var(--border); border-radius:10px;
+    padding:16px 18px;
+  }
+  .card h3{
+    margin:0 0 12px; font-size:13.5px; color:var(--text); font-weight:600;
+    display:flex; justify-content:space-between; align-items:center;
+  }
+  .card h3 .tag{font-size:10.5px; color:var(--muted); font-weight:400;}
+  .chart-box{position:relative; height:280px;}
+  .chart-box.tall{height:360px;}
+  table{width:100%; border-collapse:collapse; font-size:12.5px;}
+  th,td{padding:7px 6px; text-align:left; border-bottom:1px solid var(--grid);}
+  th{color:var(--muted); font-weight:600; font-size:11px; text-transform:uppercase;}
+  tr:hover td{background:rgba(255,255,255,0.02);}
+  .num{text-align:right; font-variant-numeric: tabular-nums;}
+  .pill{padding:2px 8px; border-radius:20px; font-size:11px; font-weight:600;}
+  .pill.good{background:rgba(51,184,168,0.15); color:var(--teal);}
+  .pill.bad{background:rgba(224,102,95,0.15); color:var(--coral);}
+  .pill.mid{background:rgba(217,164,65,0.15); color:var(--gold);}
+  .live-dot{display:inline-block; width:8px; height:8px; border-radius:50%; background:var(--teal); margin-right:6px; box-shadow:0 0 6px var(--teal); animation:pulse 1.6s infinite;}
+  @keyframes pulse{0%{opacity:1;}50%{opacity:0.35;}100%{opacity:1;}}
+  @media (max-width: 980px){
+    .kpis{grid-template-columns:repeat(2,1fr);}
+    .grid, .grid3{grid-template-columns:1fr;}
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="topbar">
+    <div>
+      <h1>Margin<span>.</span>Dashboard</h1>
+      <div class="sub"><span class="live-dot"></span>Exam Center Ops · Revenue &amp; Margin Overview (Live)</div>
+    </div>
+    <div class="sub" id="periodLabel"></div>
+  </div>
+
+  <div class="tabbar">
+    <button class="tabbtn active" data-tab="overview">Overview</button>
+    <button class="tabbtn" data-tab="projects">Project-wise</button>
+  </div>
+
+  <div id="tab-overview" class="tabpage active">
+
+  <div class="filters">
+    <div><label>Month</label>
+      <select id="monthFilter"><option value="all">All Months</option></select>
+    </div>
+    <div><label>Service</label>
+      <select id="serviceFilter"><option value="all">All Services</option></select>
+    </div>
+  </div>
+
+  <div class="kpis" id="kpiRow"></div>
+
+  <div class="grid">
+    <div class="card">
+      <h3>Revenue &amp; Margin Trend <span class="tag">by month</span></h3>
+      <div class="chart-box tall"><canvas id="trendChart"></canvas></div>
+    </div>
+    <div class="card">
+      <h3>Project Status <span class="tag">by count</span></h3>
+      <div class="chart-box tall"><canvas id="statusChart"></canvas></div>
+    </div>
+  </div>
+
+  <div class="grid">
+    <div class="card">
+      <h3>Top Clients by Revenue <span class="tag">top 10</span></h3>
+      <div class="chart-box"><canvas id="clientChart"></canvas></div>
+    </div>
+    <div class="card">
+      <h3>Service-wise Margin % <span class="tag">all services</span></h3>
+      <div class="chart-box"><canvas id="serviceChart"></canvas></div>
+    </div>
+  </div>
+
+  <div class="grid">
+    <div class="card">
+      <h3>Revenue vs Margin % <span class="tag">per project, bubble</span></h3>
+      <div class="chart-box"><canvas id="scatterChart"></canvas></div>
+    </div>
+    <div class="card">
+      <h3>Invoice Status <span class="tag">raised vs pending</span></h3>
+      <div class="chart-box"><canvas id="invoiceChart"></canvas></div>
+    </div>
+  </div>
+
+  <div class="card">
+    <h3>Client-wise Summary <span class="tag" id="clientTableTag">clients</span></h3>
+    <div class="scroll-table">
+    <table id="clientTable">
+      <thead><tr><th>Client</th><th class="num">Projects</th><th class="num">Revenue</th><th class="num">Margin</th><th class="num">Margin %</th></tr></thead>
+      <tbody></tbody>
+    </table>
+    </div>
+  </div>
+
+  </div>
+
+  <div id="tab-projects" class="tabpage">
+
+  <div class="kpis" id="projKpiRow"></div>
+
+  <div class="grid">
+    <div class="card">
+      <h3>Negative-Margin Projects <span class="tag">amount, sorted worst first</span></h3>
+      <div class="chart-box tall"><canvas id="negChart"></canvas></div>
+    </div>
+    <div class="card">
+      <h3>Positive vs Negative <span class="tag">project count</span></h3>
+      <div class="chart-box tall"><canvas id="posNegChart"></canvas></div>
+    </div>
+  </div>
+
+  <div class="card">
+    <h3>All Projects <span class="tag" id="projTableTag">projects</span></h3>
+    <div class="search-row">
+      <input type="text" id="projSearch" placeholder="Search project code, client or service...">
+      <label style="font-size:12px;"><input type="checkbox" id="negOnly"> Show negative only</label>
+    </div>
+    <div class="scroll-table">
+      <table id="projectTable">
+        <thead><tr><th>Project Code</th><th>Client</th><th>Service</th><th>Month</th><th class="num">Revenue</th><th class="num">Margin</th><th class="num">Margin %</th><th>Status</th></tr></thead>
+        <tbody></tbody>
+      </table>
+    </div>
+  </div>
+
+  </div>
+
+</div>
+
+<script>
+const DATA = __DATA_JSON__;
+
+const PROJECT_DATA = __PROJECT_JSON__;
+
+const fmtCr = v => {
+  if (v === null || v === undefined || isNaN(v)) return '-';
+  const cr = v/1e7;
+  return '₹' + cr.toFixed(2) + ' Cr';
+};
+const fmtNum = v => Number(v).toLocaleString('en-IN');
+
+Chart.defaults.color = '#8ea0c2';
+Chart.defaults.font.family = "'Segoe UI', Arial, sans-serif";
+Chart.defaults.borderColor = 'rgba(255,255,255,0.06)';
+
+const COLORS = {
+  gold:'#d9a441', teal:'#33b8a8', coral:'#e0665f', violet:'#8b7ee8', blue:'#4f8bd0'
+};
+const PALETTE = ['#d9a441','#33b8a8','#e0665f','#8b7ee8','#4f8bd0','#5cc96a','#e0a8d0','#e0d05f','#6fa8e0','#c98b5c','#8adfd4','#b98ae0'];
+
+let monthFilter = 'all';
+let serviceFilter = 'all';
+
+function populateFilters(){
+  const mSel = document.getElementById('monthFilter');
+  DATA.monthly.forEach(m=>{
+    const o = document.createElement('option'); o.value = m.Month; o.textContent = m.Month;
+    mSel.appendChild(o);
+  });
+  const sSel = document.getElementById('serviceFilter');
+  DATA.service.forEach(s=>{
+    const o = document.createElement('option'); o.value = s.Service; o.textContent = s.Service;
+    sSel.appendChild(o);
+  });
+  mSel.addEventListener('change', e=>{ monthFilter = e.target.value; renderAll(); });
+  sSel.addEventListener('change', e=>{ serviceFilter = e.target.value; renderAll(); });
+}
+
+function filteredScatter(){
+  return DATA.scatter.filter(r => (monthFilter==='all' || r.Month===monthFilter) && (serviceFilter==='all' || r.Service===serviceFilter));
+}
+
+let charts = {};
+function destroy(id){ if(charts[id]){ charts[id].destroy(); } }
+
+function renderKPIs(){
+  const rows = filteredScatter();
+  const totalRevenue = rows.reduce((a,b)=>a+b.Revenue,0);
+  const totalProjects = rows.length;
+  const avgMargin = rows.length ? (rows.reduce((a,b)=>a+b['MarginPct'],0)/rows.length) : 0;
+  const pendingCount = DATA.istatus.find(i=>i['Invoice Status']==='Pending')?.Count || 0;
+  const activeCount = DATA.pstatus.find(p=>p['Project Status']==='Active')?.Count || 0;
+
+  const kpiRow = document.getElementById('kpiRow');
+  kpiRow.innerHTML = '';
+  const items = [
+    {label:'Total Revenue', value: fmtCr(totalRevenue), delta:''},
+    {label:'Total Projects', value: fmtNum(totalProjects), delta:''},
+    {label:'Avg Margin %', value: avgMargin.toFixed(1)+'%', delta: avgMargin>60?'healthy':'watch', cls: avgMargin>60?'up':'down'},
+    {label:'Active Projects', value: fmtNum(activeCount), delta:''},
+    {label:'Invoices Pending', value: fmtNum(pendingCount), delta:'needs follow-up', cls:'down'}
+  ];
+  items.forEach(it=>{
+    const div = document.createElement('div'); div.className='kpi';
+    div.innerHTML = `<div class="label">${it.label}</div><div class="value">${it.value}</div>` + (it.delta?`<div class="delta ${it.cls||''}">${it.delta}</div>`:'');
+    kpiRow.appendChild(div);
+  });
+}
+
+function renderTrend(){
+  destroy('trend');
+  const ctx = document.getElementById('trendChart');
+  const labels = DATA.monthly.map(m=>m.Month);
+  charts.trend = new Chart(ctx, {
+    data:{
+      labels,
+      datasets:[
+        {type:'bar', label:'Revenue (Cr)', data: DATA.monthly.map(m=>+(m.Revenue/1e7).toFixed(2)), backgroundColor:'rgba(79,139,208,0.55)', borderRadius:5, yAxisID:'y'},
+        {type:'bar', label:'Margin (Cr)', data: DATA.monthly.map(m=>+(m.Margin/1e7).toFixed(2)), backgroundColor:'rgba(217,164,65,0.7)', borderRadius:5, yAxisID:'y'},
+        {type:'line', label:'Margin %', data: DATA.monthly.map(m=>m.MarginPct), borderColor:COLORS.teal, backgroundColor:COLORS.teal, tension:0.35, yAxisID:'y1', pointRadius:4}
+      ]
+    },
+    options:{
+      responsive:true, maintainAspectRatio:false,
+      interaction:{mode:'index', intersect:false},
+      scales:{
+        y:{position:'left', grid:{color:'rgba(255,255,255,0.06)'}, title:{display:true,text:'₹ Cr'}},
+        y1:{position:'right', grid:{display:false}, title:{display:true,text:'Margin %'}, min:0}
+      },
+      plugins:{legend:{position:'bottom', labels:{boxWidth:12}}}
+    }
+  });
+}
+
+function renderStatus(){
+  destroy('status');
+  const ctx = document.getElementById('statusChart');
+  charts.status = new Chart(ctx, {
+    type:'doughnut',
+    data:{
+      labels: DATA.pstatus.map(p=>p['Project Status']),
+      datasets:[{data: DATA.pstatus.map(p=>p.Count), backgroundColor:[COLORS.teal, COLORS.coral, COLORS.gold], borderWidth:2, borderColor:'#121b2e'}]
+    },
+    options:{responsive:true, maintainAspectRatio:false, plugins:{legend:{position:'bottom'}}}
+  });
+}
+
+function renderClient(){
+  destroy('client');
+  const ctx = document.getElementById('clientChart');
+  const top = [...DATA.client].sort((a,b)=>b.Revenue-a.Revenue).slice(0,10);
+  charts.client = new Chart(ctx, {
+    type:'bar',
+    data:{
+      labels: top.map(c=>c.Client.length>22? c.Client.slice(0,20)+'…': c.Client),
+      datasets:[{label:'Revenue (Cr)', data: top.map(c=>+(c.Revenue/1e7).toFixed(2)), backgroundColor: PALETTE[4], borderRadius:5}]
+    },
+    options:{
+      indexAxis:'y', responsive:true, maintainAspectRatio:false,
+      plugins:{legend:{display:false}},
+      scales:{x:{title:{display:true, text:'₹ Cr'}}}
+    }
+  });
+}
+
+function renderService(){
+  destroy('service');
+  const ctx = document.getElementById('serviceChart');
+  const svc = [...DATA.service].sort((a,b)=>b.MarginPct-a.MarginPct);
+  charts.service = new Chart(ctx, {
+    type:'bar',
+    data:{
+      labels: svc.map(s=>s.Service),
+      datasets:[{label:'Margin %', data: svc.map(s=>s.MarginPct), backgroundColor: svc.map(s=> s.MarginPct<0? COLORS.coral : PALETTE[1]), borderRadius:5}]
+    },
+    options:{
+      responsive:true, maintainAspectRatio:false,
+      plugins:{legend:{display:false}},
+      scales:{x:{ticks:{autoSkip:false, maxRotation:45, minRotation:30}}, y:{title:{display:true,text:'%'}}}
+    }
+  });
+}
+
+function renderScatter(){
+  destroy('scatter');
+  const ctx = document.getElementById('scatterChart');
+  const rows = filteredScatter();
+  const points = rows.map(r=>({x: r.Revenue/1e5, y: r['MarginPct'], r: Math.min(18, Math.max(4, Math.sqrt(Math.abs(r.Revenue))/700))}));
+  charts.scatter = new Chart(ctx, {
+    type:'bubble',
+    data:{ datasets:[{label:'Projects', data: points, backgroundColor:'rgba(139,126,232,0.55)', borderColor:'rgba(139,126,232,0.9)'}] },
+    options:{
+      responsive:true, maintainAspectRatio:false,
+      plugins:{legend:{display:false}, tooltip:{callbacks:{label: (c)=> 'Revenue ₹'+(c.raw.x).toFixed(1)+'L, Margin '+c.raw.y.toFixed(1)+'%'}}},
+      scales:{
+        x:{title:{display:true, text:'Revenue (₹ Lakh)'}},
+        y:{title:{display:true, text:'Margin %'}}
+      }
+    }
+  });
+}
+
+function renderInvoice(){
+  destroy('invoice');
+  const ctx = document.getElementById('invoiceChart');
+  charts.invoice = new Chart(ctx, {
+    type:'pie',
+    data:{
+      labels: DATA.istatus.map(i=>i['Invoice Status']),
+      datasets:[{data: DATA.istatus.map(i=>i.Count), backgroundColor:[COLORS.teal, COLORS.gold, COLORS.coral], borderWidth:2, borderColor:'#121b2e'}]
+    },
+    options:{responsive:true, maintainAspectRatio:false, plugins:{legend:{position:'bottom'}}}
+  });
+}
+
+function renderTable(){
+  const tbody = document.querySelector('#clientTable tbody');
+  tbody.innerHTML='';
+  const rows = [...DATA.client].sort((a,b)=>b.Revenue-a.Revenue);
+  rows.forEach(c=>{
+    const tr = document.createElement('tr');
+    const pillClass = c.MarginPct >= 60 ? 'good' : (c.MarginPct >=0 ? 'mid':'bad');
+    tr.innerHTML = `<td>${c.Client}</td><td class="num">${c.Projects}</td><td class="num">${fmtCr(c.Revenue)}</td><td class="num">${fmtCr(c.Margin)}</td><td class="num"><span class="pill ${pillClass}">${c.MarginPct.toFixed(1)}%</span></td>`;
+    tbody.appendChild(tr);
+  });
+  document.getElementById('clientTableTag').textContent = DATA.client.length + ' clients';
+}
+
+function renderAll(){
+  renderKPIs();
+  renderTrend();
+  renderStatus();
+  renderClient();
+  renderService();
+  renderScatter();
+  renderInvoice();
+  renderTable();
+}
+
+// ---------------- Tab switching ----------------
+document.querySelectorAll('.tabbtn').forEach(btn=>{
+  btn.addEventListener('click', ()=>{
+    document.querySelectorAll('.tabbtn').forEach(b=>b.classList.remove('active'));
+    document.querySelectorAll('.tabpage').forEach(p=>p.classList.remove('active'));
+    btn.classList.add('active');
+    document.getElementById('tab-'+btn.dataset.tab).classList.add('active');
+    if(btn.dataset.tab === 'projects'){ renderProjectTab(); }
+  });
+});
+
+// ---------------- Project-wise tab ----------------
+let projSearchTerm = '';
+let projNegOnly = false;
+let projChartsInit = false;
+
+function renderProjKPIs(){
+  const neg = PROJECT_DATA.filter(p=>p.Margin<0);
+  const pos = PROJECT_DATA.filter(p=>p.Margin>0);
+  const totalNeg = neg.reduce((a,b)=>a+b.Margin,0);
+  const row = document.getElementById('projKpiRow');
+  row.innerHTML = '';
+  const items = [
+    {label:'Negative-Margin Projects', value: fmtNum(neg.length), cls:'down'},
+    {label:'Positive-Margin Projects', value: fmtNum(pos.length), cls:'up'},
+    {label:'Total Negative Margin', value: fmtCr(totalNeg), cls:'down'},
+    {label:'Total Projects', value: fmtNum(PROJECT_DATA.length), cls:''},
+  ];
+  items.forEach(it=>{
+    const div = document.createElement('div'); div.className='kpi';
+    div.innerHTML = `<div class="label">${it.label}</div><div class="value">${it.value}</div><div class="delta ${it.cls}"></div>`;
+    row.appendChild(div);
+  });
+}
+
+function renderNegChart(){
+  destroy('neg');
+  const ctx = document.getElementById('negChart');
+  const neg = [...PROJECT_DATA].filter(p=>p.Margin<0).sort((a,b)=>a.Margin-b.Margin).slice(0,40);
+  charts.neg = new Chart(ctx, {
+    type:'bar',
+    data:{
+      labels: neg.map(p=> p.ProjectCode.length>28 ? p.ProjectCode.slice(0,26)+'…' : p.ProjectCode),
+      datasets:[{label:'Margin (₹)', data: neg.map(p=>p.Margin), backgroundColor: COLORS.coral, borderRadius:4}]
+    },
+    options:{
+      indexAxis:'y', responsive:true, maintainAspectRatio:false,
+      plugins:{legend:{display:false}},
+      scales:{x:{title:{display:true, text:'Margin (₹)'}}, y:{ticks:{autoSkip:false, font:{size:9}}}}
+    }
+  });
+}
+
+function renderPosNegChart(){
+  destroy('posneg');
+  const ctx = document.getElementById('posNegChart');
+  const neg = PROJECT_DATA.filter(p=>p.Margin<0).length;
+  const pos = PROJECT_DATA.filter(p=>p.Margin>0).length;
+  charts.posneg = new Chart(ctx, {
+    type:'doughnut',
+    data:{
+      labels:['Positive Margin','Negative Margin'],
+      datasets:[{data:[pos,neg], backgroundColor:[COLORS.teal, COLORS.coral], borderWidth:2, borderColor:'#121b2e'}]
+    },
+    options:{responsive:true, maintainAspectRatio:false, plugins:{legend:{position:'bottom'}}}
+  });
+}
+
+function renderProjectTable(){
+  const tbody = document.querySelector('#projectTable tbody');
+  tbody.innerHTML = '';
+  const term = projSearchTerm.toLowerCase();
+  const rows = PROJECT_DATA.filter(p=>{
+    if(projNegOnly && p.Margin>=0) return false;
+    if(!term) return true;
+    return p.ProjectCode.toLowerCase().includes(term) || p.Client.toLowerCase().includes(term) || p.Service.toLowerCase().includes(term);
+  });
+  rows.forEach(p=>{
+    const tr = document.createElement('tr');
+    tr.className = p.Margin < 0 ? 'row-neg' : 'row-pos';
+    const badge = p.Margin < 0 ? '<span class="badge neg">Negative</span>' : '<span class="badge pos">Positive</span>';
+    tr.innerHTML = `<td>${p.ProjectCode}</td><td>${p.Client}</td><td>${p.Service}</td><td>${p.Month}</td>` +
+      `<td class="num">${fmtNum(Math.round(p.Revenue))}</td><td class="num">${fmtNum(Math.round(p.Margin))}</td><td class="num">${p.MarginPct.toFixed(1)}%</td><td>${badge}</td>`;
+    tbody.appendChild(tr);
+  });
+  document.getElementById('projTableTag').textContent = rows.length + ' of ' + PROJECT_DATA.length + ' projects';
+}
+
+function renderProjectTab(){
+  renderProjKPIs();
+  if(!projChartsInit){
+    renderNegChart();
+    renderPosNegChart();
+    projChartsInit = true;
+  }
+  renderProjectTable();
+}
+
+document.getElementById('projSearch').addEventListener('input', e=>{
+  projSearchTerm = e.target.value;
+  renderProjectTable();
+});
+document.getElementById('negOnly').addEventListener('change', e=>{
+  projNegOnly = e.target.checked;
+  renderProjectTable();
+});
+
+populateFilters();
+document.getElementById('periodLabel').textContent = '__PERIOD_LABEL__';
+renderAll();
+</script>
+</body>
+</html>
+-----------------------------------------------------------------------------------------
 
