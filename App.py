@@ -89,13 +89,13 @@ COLUMN_TARGETS = {
     "ClientSSC": ["Client (With SSC)"],
     "Service": ["Service"],
     "Month": ["Month"],
-    "Quarter": ["Quater", "Quarter"],
+    "ExamStartDate": ["Exam Start Date", "Exam Date", "Start Date"],
     "ExamNameDate": ["Exam Name & Date", "Exam Name"],
     "ProjectStatus": ["Project Status"],
     "InvoiceStatus": ["Invoice Status"],
     "ReviewInvoice": ["Review Based on Invoice (Raised/Pending)"],
     "BillingType": ["Billing Type"],
-    "BillingStatus": ["Biling Status", "Billing Status"],
+    "BillingStatus": ["Status", "Billing Status", "Biling Status"],
     "Revenue": ["Revenue"],
     "Margin": ["Margin Amount Based On Overall Subtotal"],
     "MarginPct": ["Margin % - Overall Subtotal", "Margin Percentage Based On Overall Subtotal"],
@@ -177,7 +177,26 @@ def prepare_data(raw: pd.DataFrame):
         fallback = pd.Series([f"ROW{i}" for i in range(len(df))], index=df.index)
     df["_ProjectCode"] = pc.where(~pc.isin(["", "nan", "None"]), fallback)
 
+    exam_start_col = cols.get("ExamStartDate")
+    if exam_start_col:
+        df["_Quarter"] = derive_quarter(df[exam_start_col])
+    else:
+        df["_Quarter"] = ""
+
     return df, cols
+
+
+def derive_quarter(series: pd.Series) -> pd.Series:
+    """Quarter label (e.g. 'Q1-2026') computed from a date column,
+    since the sheet doesn't have a dedicated Quarter column."""
+    dt = pd.to_datetime(series, errors="coerce", dayfirst=True)
+    out = []
+    for d in dt:
+        if pd.isna(d):
+            out.append("")
+        else:
+            out.append(f"Q{d.quarter}-{d.year}")
+    return pd.Series(out, index=series.index)
 
 
 def month_sort_key(m: str):
@@ -207,7 +226,7 @@ def build_rows(df: pd.DataFrame, cols: dict):
         "clientSSC": _series_or_blank(df, cols, "ClientSSC", n),
         "service": _series_or_blank(df, cols, "Service", n),
         "month": _series_or_blank(df, cols, "Month", n),
-        "quarter": _series_or_blank(df, cols, "Quarter", n),
+        "quarter": df["_Quarter"].fillna("").astype(str),
         "examNameDate": _series_or_blank(df, cols, "ExamNameDate", n),
         "projectStatus": _series_or_blank(df, cols, "ProjectStatus", n),
         "invoiceStatus": _series_or_blank(df, cols, "InvoiceStatus", n),
