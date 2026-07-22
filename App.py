@@ -71,6 +71,32 @@ def clean_numeric(series: pd.Series) -> pd.Series:
     return pd.to_numeric(cleaned, errors="coerce")
 
 
+# ----------------------------------------------------------------------
+# MANUAL COLUMN OVERRIDES (most reliable fix when name-matching keeps failing)
+# ----------------------------------------------------------------------
+# If a column keeps showing blank despite existing in the sheet, it usually
+# means the auto name-matching below isn't finding it (hidden characters,
+# different punctuation, a duplicate header elsewhere in the sheet, etc).
+# The bullet-proof fix: tell it the column's LETTER exactly as it appears in
+# the "Raw Data" tab (open the sheet, check the column letter above the
+# header - A/B/C.../U...), and it will use that column directly - no name
+# matching involved at all.
+#
+# Leave a value as "" to fall back to automatic name-based matching instead.
+MANUAL_COLUMN_OVERRIDES = {
+    "OpGuardActualCamVoipNode": "U",  # <- from your screenshot; update the letter if it's different in the "Raw Data" tab
+}
+
+
+def col_letter_to_index(letter: str) -> int:
+    """Convert a Sheets/Excel-style column letter ('A', 'U', 'AB', ...) to a 0-based index."""
+    letter = letter.strip().upper()
+    idx = 0
+    for ch in letter:
+        idx = idx * 26 + (ord(ch) - ord("A") + 1)
+    return idx - 1
+
+
 def find_col(df: pd.DataFrame, target: str):
     """Fuzzy-match a column name ignoring case, whitespace, and punctuation
     (spaces, slashes, dashes, etc.), since sheet headers sometimes have
@@ -139,13 +165,22 @@ def resolve_columns(df: pd.DataFrame):
     """Returns {logical_name: actual_sheet_column_or_None}."""
     resolved = {}
     for logical, candidates in COLUMN_TARGETS.items():
+        # 1) manual position override wins if one is set for this field
+        override_letter = MANUAL_COLUMN_OVERRIDES.get(logical, "")
+        if override_letter:
+            idx = col_letter_to_index(override_letter)
+            if 0 <= idx < len(df.columns):
+                resolved[logical] = df.columns[idx]
+                continue
+
+        # 2) strict name match
         found = None
         for cand in candidates:
             found = find_col(df, cand)
             if found:
                 break
+        # 3) loose keyword-based fallback match
         if not found:
-            # strict match failed - try the looser keyword-based fallback
             for cand in candidates:
                 found = find_col_loose(df, cand)
                 if found:
@@ -312,9 +347,11 @@ if prepared_df.empty:
 
 rows = build_rows(prepared_df, resolved_cols)
 
-with st.expander("🔧 Debug: sheet columns & field mapping (click to check if a column isn't showing data)"):
-    st.write("**Raw column names found in the Google Sheet:**")
-    st.code("\n".join(raw_df.columns.tolist()))
+with st.expander("🔧 Debug: sheet columns & field mapping (check here if a column isn't showing data)", expanded=True):
+    st.write("**Raw column names found in the Google Sheet ('Raw Data' tab):**")
+    st.code("\n".join(f"{i}: {c}" for i, c in enumerate(raw_df.columns.tolist())))
+    st.write("**Manual position overrides currently active:**")
+    st.json({k: v for k, v in MANUAL_COLUMN_OVERRIDES.items() if v})
     st.write("**How each dashboard field mapped to a sheet column:**")
     st.json({k: (v if v else "⚠️ NOT FOUND") for k, v in resolved_cols.items()})
 
