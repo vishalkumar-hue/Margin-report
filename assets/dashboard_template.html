@@ -257,6 +257,7 @@
     <div class="search-row">
       <input type="text" id="projSearch" placeholder="Search project code, client or service...">
       <label style="font-size:12px;"><input type="checkbox" id="negOnly"> Show negative only</label>
+      <label style="font-size:12px;"><input type="checkbox" id="posOnly"> Show positive only</label>
     </div>
     <div class="scroll-table">
       <table id="projectTable">
@@ -699,6 +700,7 @@ document.querySelectorAll('.tabbtn').forEach(btn=>{
 // ---------------- Project-wise tab ----------------
 let projSearchTerm = '';
 let projNegOnly = false;
+let projPosOnly = false;
 
 // renderProjKPIs: KPI cards on the Project-wise tab (neg/pos project counts, total negative margin).
 function renderProjKPIs(){
@@ -759,15 +761,22 @@ function renderPosNegChart(){
 }
 
 // renderProjectTable: fills the "All Projects" table, applying the free-text
-// search box and the "negative only" checkbox on top of the global filters.
+// search box and the "negative only" / "positive only" checkboxes on top of
+// the global filters. Search now checks every column actually shown in the
+// table (project code, client, client-with-SSC, service, month, exam name &
+// date, BIO & Fri Dimensioning, invoice status, billing status) instead of
+// just project code/client/service - that's what made it feel "not working"
+// when someone searched by month or invoice status etc.
 function renderProjectTable(){
   const tbody = document.querySelector('#projectTable tbody');
   tbody.innerHTML = '';
-  const term = projSearchTerm.toLowerCase();
+  const term = projSearchTerm.trim().toLowerCase();
+  const searchFields = ['projectCode','client','clientSSC','service','month','examNameDate','bioFriDimensioning','invoiceStatus','billingStatus'];
   const rows = getFilteredRows().filter(p=>{
     if(projNegOnly && (p.margin||0)>=0) return false;
+    if(projPosOnly && (p.margin||0)<=0) return false;
     if(!term) return true;
-    return (p.projectCode||'').toLowerCase().includes(term) || (p.client||'').toLowerCase().includes(term) || (p.service||'').toLowerCase().includes(term);
+    return searchFields.some(field => String(p[field] ?? '').toLowerCase().includes(term));
   });
   rows.forEach(p=>{
     const tr = document.createElement('tr');
@@ -796,6 +805,12 @@ document.getElementById('projSearch').addEventListener('input', e=>{
 });
 document.getElementById('negOnly').addEventListener('change', e=>{
   projNegOnly = e.target.checked;
+  if(projNegOnly){ projPosOnly = false; document.getElementById('posOnly').checked = false; }
+  renderProjectTable();
+});
+document.getElementById('posOnly').addEventListener('change', e=>{
+  projPosOnly = e.target.checked;
+  if(projPosOnly){ projNegOnly = false; document.getElementById('negOnly').checked = false; }
   renderProjectTable();
 });
 
