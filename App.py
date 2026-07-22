@@ -88,6 +88,22 @@ def find_col(df: pd.DataFrame, target: str):
     return None
 
 
+def find_col_loose(df: pd.DataFrame, target: str):
+    """Looser fallback for stubborn headers: matches a column that contains
+    ALL the significant words from target (3+ letters), in any order,
+    ignoring exact punctuation/spacing/duplicated-name suffixes pandas adds
+    (e.g. 'Foo.1'). Used only when the strict find_col match fails."""
+    import re
+    words = [w for w in re.split(r"[^a-z0-9]+", target.lower()) if len(w) > 2]
+    if not words:
+        return None
+    for c in df.columns:
+        c_norm = re.sub(r"[^a-z0-9]+", "", c.lower())
+        if all(w in c_norm for w in words):
+            return c
+    return None
+
+
 # Logical field -> possible sheet header(s) to try, in order.
 COLUMN_TARGETS = {
     "ProjectCode": ["Project Code Revenue Report"],
@@ -128,6 +144,12 @@ def resolve_columns(df: pd.DataFrame):
             found = find_col(df, cand)
             if found:
                 break
+        if not found:
+            # strict match failed - try the looser keyword-based fallback
+            for cand in candidates:
+                found = find_col_loose(df, cand)
+                if found:
+                    break
         resolved[logical] = found
     return resolved
 
