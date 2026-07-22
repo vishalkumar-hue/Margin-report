@@ -101,6 +101,15 @@ COLUMN_TARGETS = {
     "MarginPct": ["Margin % - Overall Subtotal", "Margin Percentage Based On Overall Subtotal"],
     "MarginPctOps": ["Margin % - Overall Subtotal-OPs"],
     "BioFriDimensioning": ["BIO & Fri Dimensioning", "Bio & Fri Dimensioning"],
+    # --- newly added columns for the "All Projects" table ---
+    "CentreCount": ["Centre Count", "Center Count"],
+    "TotalCandidate": ["Total Candidate", "Total Candidates"],
+    "MaxCandidate": ["Max Candidate", "Max Candidates"],
+    "OpGuardActualCamVoipNode": [
+        "Op/Guard Actual Count/Cam Count/VOIP/Node",
+        "Op/Guard Actual Count / Cam Count / VOIP / Node",
+        "Op/Guard Actual Count/Cam Count/VOIP/Node ",
+    ],
 }
 
 
@@ -117,7 +126,14 @@ def resolve_columns(df: pd.DataFrame):
     return resolved
 
 
-NUMERIC_FIELDS = {"Revenue", "Margin", "MarginPct", "MarginPctOps"}
+# Numeric fields get comma/₹/% stripped and converted to float.
+# CentreCount / TotalCandidate / MaxCandidate are plain counts, so they go here too.
+# OpGuardActualCamVoipNode is left out - it's a combined text field (Op/Guard/Cam/VOIP/Node
+# all in one cell), so it stays as text.
+NUMERIC_FIELDS = {
+    "Revenue", "Margin", "MarginPct", "MarginPctOps",
+    "CentreCount", "TotalCandidate", "MaxCandidate",
+}
 
 
 def prepare_data(raw: pd.DataFrame):
@@ -220,6 +236,11 @@ def build_rows(df: pd.DataFrame, cols: dict):
     marginpct = df[cols["MarginPct"]] if cols.get("MarginPct") else pd.Series([0.0] * n, index=df.index)
     marginpct_ops = df[cols["MarginPctOps"]] if cols.get("MarginPctOps") else pd.Series([None] * n, index=df.index)
 
+    # newly added numeric count columns
+    centre_count = df[cols["CentreCount"]] if cols.get("CentreCount") else pd.Series([0.0] * n, index=df.index)
+    total_candidate = df[cols["TotalCandidate"]] if cols.get("TotalCandidate") else pd.Series([0.0] * n, index=df.index)
+    max_candidate = df[cols["MaxCandidate"]] if cols.get("MaxCandidate") else pd.Series([0.0] * n, index=df.index)
+
     out = pd.DataFrame({
         "projectCode": df["_ProjectCode"],
         "client": _series_or_blank(df, cols, "Client", n),
@@ -238,6 +259,11 @@ def build_rows(df: pd.DataFrame, cols: dict):
         "margin": margin.fillna(0),
         "marginPct": marginpct.fillna(0),
         "marginPctOps": marginpct_ops,
+        # newly added fields for the "All Projects" table
+        "centreCount": centre_count.fillna(0),
+        "totalCandidate": total_candidate.fillna(0),
+        "maxCandidate": max_candidate.fillna(0),
+        "opGuardData": _series_or_blank(df, cols, "OpGuardActualCamVoipNode", n),
     })
     return out.to_dict("records")
 
