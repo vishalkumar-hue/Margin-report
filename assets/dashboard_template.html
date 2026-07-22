@@ -49,9 +49,9 @@
   .kpi .delta{font-size:11.5px; margin-top:4px;}
   .up{color:var(--teal);} .down{color:var(--coral);}
   .filters{
-    display:flex; gap:10px; margin-bottom:10px; flex-wrap:wrap; align-items:center;
+    display:flex; gap:10px; margin-bottom:10px; flex-wrap:wrap; align-items:flex-start;
   }
-  .filters label{font-size:11.5px; color:var(--muted); margin-right:6px;}
+  .filters label{font-size:11.5px; color:var(--muted); margin-right:6px; display:block; margin-bottom:4px;}
   select{
     background:var(--panel-2); color:var(--text); border:1px solid var(--border);
     border-radius:6px; padding:7px 10px; font-size:13px; max-width:220px;
@@ -74,6 +74,41 @@
     border-radius:6px; padding:5px 10px; font-size:11.5px; cursor:pointer; font-family:inherit;
   }
   .clear-btn:hover{color:var(--coral); border-color:var(--coral);}
+
+  /* ---- Multi-select filter dropdown ---- */
+  .multiselect{position:relative; min-width:170px; margin-bottom:10px;}
+  .ms-btn{
+    width:100%; text-align:left; background:var(--panel-2); color:var(--text);
+    border:1px solid var(--border); border-radius:6px; padding:7px 10px; font-size:13px;
+    cursor:pointer; font-family:inherit; position:relative; padding-right:24px;
+  }
+  .ms-btn::after{content:'▾'; position:absolute; right:9px; top:50%; transform:translateY(-50%); color:var(--muted); font-size:10px;}
+  .ms-btn.active{border-color:var(--gold); color:var(--gold);}
+  .ms-panel{
+    display:none; position:absolute; top:calc(100% + 4px); left:0; z-index:20;
+    background:var(--panel-2); border:1px solid var(--border); border-radius:8px;
+    width:230px; max-height:280px; padding:8px; box-shadow:0 8px 24px rgba(0,0,0,0.4);
+  }
+  .ms-panel.open{display:block;}
+  .ms-search{
+    width:100%; background:var(--bg); color:var(--text); border:1px solid var(--border);
+    border-radius:5px; padding:6px 8px; font-size:12.5px; margin-bottom:6px;
+  }
+  .ms-actions{display:flex; gap:8px; margin-bottom:6px;}
+  .ms-actions button{
+    flex:1; background:transparent; border:1px solid var(--border); color:var(--muted);
+    border-radius:5px; padding:4px 6px; font-size:11px; cursor:pointer; font-family:inherit;
+  }
+  .ms-actions button:hover{color:var(--gold); border-color:var(--gold);}
+  .ms-list{max-height:170px; overflow-y:auto;}
+  .ms-option{
+    display:flex; align-items:center; gap:7px; font-size:12.5px; padding:4px 3px;
+    border-radius:4px; cursor:pointer;
+  }
+  .ms-option:hover{background:rgba(255,255,255,0.04);}
+  .ms-option input{margin:0; accent-color: var(--gold);}
+  .ms-option span{overflow:hidden; text-overflow:ellipsis; white-space:nowrap;}
+
   .tabbar{
     display:flex; gap:6px; margin-bottom:22px; border-bottom:1px solid var(--border);
   }
@@ -241,14 +276,18 @@
 </div>
 
 <script>
+// ROWS = row-level data coming from Python (one object per sheet row, already cleaned).
+// MONTH_ORDER = chronological list of month labels, used to sort month-based charts/filters.
 const ROWS = __ROWS_JSON__;
 const MONTH_ORDER = __MONTH_ORDER_JSON__;
 
+// fmtCr: formats a raw rupee number into "₹X.XX Cr" for KPI/table display.
 const fmtCr = v => {
   if (v === null || v === undefined || isNaN(v)) return '-';
   const cr = v/1e7;
   return '₹' + cr.toFixed(2) + ' Cr';
 };
+// fmtNum: formats a number using Indian digit grouping (e.g. 12,34,567).
 const fmtNum = v => Number(v).toLocaleString('en-IN');
 
 Chart.defaults.color = '#8ea0c2';
@@ -261,6 +300,9 @@ const COLORS = {
 const PALETTE = ['#d9a441','#33b8a8','#e0665f','#8b7ee8','#4f8bd0','#5cc96a','#e0a8d0','#e0d05f','#6fa8e0','#c98b5c','#8adfd4','#b98ae0'];
 
 // ---------------- Generic filter system (shared across both tabs) ----------------
+// FILTER_DEFS: describes every filter shown in the top filter bar -
+// key = internal id, label = shown to user, field = matching key in each row object,
+// order (optional) = fixed sort order for values (used for Month so it doesn't sort A-Z).
 const FILTER_DEFS = [
   {key:'month', label:'Month', field:'month', order: MONTH_ORDER},
   {key:'quarter', label:'Quarter', field:'quarter'},
@@ -275,9 +317,18 @@ const FILTER_DEFS = [
   {key:'marginPctOps', label:'Margin % - Overall Subtotal-OPs', field:'marginPctOps'},
 ];
 
+// activeFilters: for every filter key we now store a Set of the EXACT values
+// the user selected (multi-select). Empty Set = no restriction = "show all".
+// (Earlier version stored a single text string and matched with substring
+// .includes(), which is what caused wrong results on numeric-looking fields
+// like Quarter / Margin % - e.g. typing "1" also matched "10", "12", "21".
+// Checkbox selection + exact match below fixes that.)
 const activeFilters = {};
-FILTER_DEFS.forEach(f => activeFilters[f.key] = '');
+FILTER_DEFS.forEach(f => activeFilters[f.key] = new Set());
 
+// uniqueValues: collects the distinct, non-blank values for a field (used to
+// populate each filter's checkbox list), sorted either by a custom `order`
+// (e.g. month order) or alphabetically.
 function uniqueValues(field, order){
   const vals = Array.from(new Set(ROWS.map(r => r[field]).filter(v => v !== null && v !== undefined && v !== '')));
   if (order && order.length){
@@ -289,67 +340,140 @@ function uniqueValues(field, order){
   return vals;
 }
 
+// triggerFilterChange: re-renders whichever tab is currently visible whenever
+// any filter selection changes.
 function triggerFilterChange(){
   renderAll();
   if (document.getElementById('tab-projects').classList.contains('active')) renderProjectTab();
 }
 
+// buildFilterBar: builds one multi-select dropdown per entry in FILTER_DEFS.
+// Each dropdown = a button (shows "All" / value / "N selected") + a popup
+// panel containing a search box and a checkbox per unique value.
 function buildFilterBar(){
   const bar = document.getElementById('filterBar');
   bar.innerHTML = '';
+
   FILTER_DEFS.forEach(f => {
+    const values = uniqueValues(f.field, f.order);
+
     const wrap = document.createElement('div');
-    const label = document.createElement('label');
-    label.textContent = f.label;
-    const input = document.createElement('input');
-    input.type = 'text';
-    input.id = 'filter_' + f.key;
-    input.setAttribute('list', 'datalist_' + f.key);
-    input.setAttribute('placeholder', 'Search / select...');
-    input.autocomplete = 'off';
-
-    const datalist = document.createElement('datalist');
-    datalist.id = 'datalist_' + f.key;
-    uniqueValues(f.field, f.order).forEach(v => {
-      const o = document.createElement('option');
-      o.value = v;
-      datalist.appendChild(o);
-    });
-
-    input.addEventListener('input', e => {
-      activeFilters[f.key] = e.target.value.trim();
-      triggerFilterChange();
-    });
-
-    wrap.appendChild(label);
-    wrap.appendChild(input);
-    wrap.appendChild(datalist);
+    wrap.className = 'multiselect';
+    wrap.innerHTML = `
+      <label>${f.label}</label>
+      <button type="button" class="ms-btn" id="msbtn_${f.key}">All</button>
+      <div class="ms-panel" id="mspanel_${f.key}">
+        <input type="text" class="ms-search" placeholder="Search...">
+        <div class="ms-actions">
+          <button type="button" class="ms-all">Select all</button>
+          <button type="button" class="ms-clear">Clear</button>
+        </div>
+        <div class="ms-list"></div>
+      </div>
+    `;
     bar.appendChild(wrap);
+
+    const listEl = wrap.querySelector('.ms-list');
+    const btn = wrap.querySelector('.ms-btn');
+    const panel = wrap.querySelector('.ms-panel');
+
+    // one checkbox row per unique value
+    values.forEach(v => {
+      const row = document.createElement('label');
+      row.className = 'ms-option';
+      const cb = document.createElement('input');
+      cb.type = 'checkbox';
+      cb.value = v;
+      const span = document.createElement('span');
+      span.textContent = v;
+      row.appendChild(cb);
+      row.appendChild(span);
+      listEl.appendChild(row);
+    });
+
+    // open/close this dropdown (and close any other open dropdown)
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      document.querySelectorAll('.ms-panel.open').forEach(p => { if (p !== panel) p.classList.remove('open'); });
+      panel.classList.toggle('open');
+    });
+    // clicking inside the panel shouldn't close it via the document-click handler below
+    panel.addEventListener('click', (e) => e.stopPropagation());
+
+    // live search inside this dropdown's option list
+    wrap.querySelector('.ms-search').addEventListener('input', (e) => {
+      const term = e.target.value.toLowerCase();
+      listEl.querySelectorAll('.ms-option').forEach(opt => {
+        opt.style.display = opt.textContent.toLowerCase().includes(term) ? '' : 'none';
+      });
+    });
+
+    // "Select all" ticks every currently-visible (i.e. not search-filtered-out) option
+    wrap.querySelector('.ms-all').addEventListener('click', () => {
+      listEl.querySelectorAll('.ms-option').forEach(opt => {
+        if (opt.style.display !== 'none') opt.querySelector('input').checked = true;
+      });
+      applyMultiSelect(f.key, listEl, btn);
+    });
+    // "Clear" unticks everything for this filter only
+    wrap.querySelector('.ms-clear').addEventListener('click', () => {
+      listEl.querySelectorAll('input[type=checkbox]').forEach(c => c.checked = false);
+      applyMultiSelect(f.key, listEl, btn);
+    });
+
+    // any checkbox toggle updates the active filter + re-renders
+    listEl.addEventListener('change', () => applyMultiSelect(f.key, listEl, btn));
   });
 }
 
+// applyMultiSelect: reads which checkboxes are ticked for one filter, stores
+// them as the active (exact-match) selection, updates the button label, and
+// re-renders the dashboard.
+function applyMultiSelect(key, listEl, btn){
+  const checked = Array.from(listEl.querySelectorAll('input[type=checkbox]:checked')).map(c => c.value);
+  activeFilters[key] = new Set(checked);
+  btn.textContent = checked.length === 0 ? 'All' : (checked.length === 1 ? checked[0] : checked.length + ' selected');
+  btn.classList.toggle('active', checked.length > 0);
+  triggerFilterChange();
+}
+
+// close any open dropdown when clicking elsewhere on the page
+document.addEventListener('click', () => {
+  document.querySelectorAll('.ms-panel.open').forEach(p => p.classList.remove('open'));
+});
+
+// "Clear all" button: resets every filter's Set + unticks every checkbox + resets every button label
 document.getElementById('clearFiltersBtn').addEventListener('click', () => {
   FILTER_DEFS.forEach(f => {
-    activeFilters[f.key] = '';
-    const inp = document.getElementById('filter_' + f.key);
-    if (inp) inp.value = '';
+    activeFilters[f.key] = new Set();
+    const panel = document.getElementById('mspanel_' + f.key);
+    if (panel) panel.querySelectorAll('input[type=checkbox]').forEach(c => c.checked = false);
+    const btn = document.getElementById('msbtn_' + f.key);
+    if (btn) { btn.textContent = 'All'; btn.classList.remove('active'); }
   });
   triggerFilterChange();
 });
 
+// rowMatches: a row passes if, for every filter, either nothing is selected
+// (Set is empty -> no restriction) or the row's value is one of the exactly
+// selected values. Exact match (Set.has) instead of substring match is what
+// fixes the wrong Quarter / Margin % filtering from before.
 function rowMatches(row){
   return FILTER_DEFS.every(f => {
-    const v = activeFilters[f.key];
-    if (!v) return true;
-    return String(row[f.field] ?? '').toLowerCase().includes(v.toLowerCase());
+    const selected = activeFilters[f.key];
+    if (!selected || selected.size === 0) return true;
+    return selected.has(String(row[f.field] ?? ''));
   });
 }
 
+// getFilteredRows: applies all active filters to the full ROWS dataset.
 function getFilteredRows(){
   return ROWS.filter(rowMatches);
 }
 
 // ---------------- Client-side aggregation from row-level data ----------------
+// aggregateBy: groups rows by a field and sums Revenue/Margin/Projects,
+// then derives MarginPct per group. Used for client/service/month charts.
 function aggregateBy(rows, field){
   const map = new Map();
   rows.forEach(r => {
@@ -366,6 +490,8 @@ function aggregateBy(rows, field){
   }));
 }
 
+// aggregateCount: groups rows by a field and just counts occurrences (used
+// for status/invoice pie & doughnut charts).
 function aggregateCount(rows, field){
   const map = new Map();
   rows.forEach(r => {
@@ -377,8 +503,12 @@ function aggregateCount(rows, field){
 
 // ---------------- Overview tab rendering ----------------
 let charts = {};
+// destroy: removes a previously-drawn Chart.js instance before redrawing it
+// (Chart.js needs the old instance destroyed or it throws "canvas already in use").
 function destroy(id){ if(charts[id]){ charts[id].destroy(); } }
 
+// renderKPIs: computes and draws the 5 top KPI cards for the Overview tab
+// (Total Revenue, Total Projects, Avg Margin %, Active Projects, Invoices Pending).
 function renderKPIs(){
   const rows = getFilteredRows();
   const totalRevenue = rows.reduce((a,b)=>a+(b.revenue||0),0);
@@ -405,6 +535,7 @@ function renderKPIs(){
   });
 }
 
+// renderTrend: draws the Revenue/Margin (bar) + Margin % (line) trend chart by month.
 function renderTrend(){
   destroy('trend');
   const ctx = document.getElementById('trendChart');
@@ -434,6 +565,7 @@ function renderTrend(){
   });
 }
 
+// renderStatus: doughnut chart of project count by Project Status.
 function renderStatus(){
   destroy('status');
   const ctx = document.getElementById('statusChart');
@@ -449,6 +581,7 @@ function renderStatus(){
   });
 }
 
+// renderClient: horizontal bar chart of top-10 clients by revenue.
 function renderClient(){
   destroy('client');
   const ctx = document.getElementById('clientChart');
@@ -469,6 +602,7 @@ function renderClient(){
   });
 }
 
+// renderService: bar chart of Margin % by service (red bars for negative margin).
 function renderService(){
   destroy('service');
   const ctx = document.getElementById('serviceChart');
@@ -488,6 +622,7 @@ function renderService(){
   });
 }
 
+// renderScatter: bubble chart of Revenue vs Margin % per project (bubble size ~ revenue).
 function renderScatter(){
   destroy('scatter');
   const ctx = document.getElementById('scatterChart');
@@ -507,6 +642,7 @@ function renderScatter(){
   });
 }
 
+// renderInvoice: pie chart of Review/Invoice status (raised vs pending etc).
 function renderInvoice(){
   destroy('invoice');
   const ctx = document.getElementById('invoiceChart');
@@ -522,6 +658,7 @@ function renderInvoice(){
   });
 }
 
+// renderTable: fills the "Client-wise Summary" table on the Overview tab.
 function renderTable(){
   const tbody = document.querySelector('#clientTable tbody');
   tbody.innerHTML='';
@@ -536,6 +673,7 @@ function renderTable(){
   document.getElementById('clientTableTag').textContent = agg.length + ' clients';
 }
 
+// renderAll: redraws every widget on the Overview tab (called whenever filters change).
 function renderAll(){
   renderKPIs();
   renderTrend();
@@ -562,6 +700,7 @@ document.querySelectorAll('.tabbtn').forEach(btn=>{
 let projSearchTerm = '';
 let projNegOnly = false;
 
+// renderProjKPIs: KPI cards on the Project-wise tab (neg/pos project counts, total negative margin).
 function renderProjKPIs(){
   const rows = getFilteredRows();
   const neg = rows.filter(p=>(p.margin||0)<0);
@@ -582,6 +721,7 @@ function renderProjKPIs(){
   });
 }
 
+// renderNegChart: horizontal bar chart of the worst 40 negative-margin projects.
 function renderNegChart(){
   destroy('neg');
   const ctx = document.getElementById('negChart');
@@ -601,6 +741,7 @@ function renderNegChart(){
   });
 }
 
+// renderPosNegChart: doughnut chart of positive vs negative margin project counts.
 function renderPosNegChart(){
   destroy('posneg');
   const ctx = document.getElementById('posNegChart');
@@ -617,6 +758,8 @@ function renderPosNegChart(){
   });
 }
 
+// renderProjectTable: fills the "All Projects" table, applying the free-text
+// search box and the "negative only" checkbox on top of the global filters.
 function renderProjectTable(){
   const tbody = document.querySelector('#projectTable tbody');
   tbody.innerHTML = '';
@@ -639,6 +782,7 @@ function renderProjectTable(){
   document.getElementById('projTableTag').textContent = rows.length + ' of ' + ROWS.length + ' projects';
 }
 
+// renderProjectTab: redraws every widget on the Project-wise tab.
 function renderProjectTab(){
   renderProjKPIs();
   renderNegChart();
@@ -655,6 +799,7 @@ document.getElementById('negOnly').addEventListener('change', e=>{
   renderProjectTable();
 });
 
+// ---- initial page load ----
 buildFilterBar();
 document.getElementById('periodLabel').textContent = '__PERIOD_LABEL__';
 renderAll();
