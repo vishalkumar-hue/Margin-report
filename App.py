@@ -72,12 +72,18 @@ def clean_numeric(series: pd.Series) -> pd.Series:
 
 
 def find_col(df: pd.DataFrame, target: str):
-    """Fuzzy-match a column name ignoring case/whitespace, since sheet
-    headers sometimes have stray spaces or slightly different casing
-    than what's typed here (e.g. 'Biling Status' vs 'Billing Status')."""
-    target_norm = target.strip().lower().replace(" ", "")
+    """Fuzzy-match a column name ignoring case, whitespace, and punctuation
+    (spaces, slashes, dashes, etc.), since sheet headers sometimes have
+    stray spaces, different slash/dash spacing, or slightly different
+    casing than what's typed here (e.g. 'Biling Status' vs 'Billing Status',
+    or 'Op / Guard Actual Count / Cam Count / VOIP / Node' vs
+    'Op/Guard Actual Count/Cam Count/VOIP/Node')."""
+    def normalize(s: str) -> str:
+        return "".join(ch for ch in s.strip().lower() if ch.isalnum())
+
+    target_norm = normalize(target)
     for c in df.columns:
-        if c.strip().lower().replace(" ", "") == target_norm:
+        if normalize(c) == target_norm:
             return c
     return None
 
@@ -283,6 +289,12 @@ if prepared_df.empty:
     st.stop()
 
 rows = build_rows(prepared_df, resolved_cols)
+
+with st.expander("🔧 Debug: sheet columns & field mapping (click to check if a column isn't showing data)"):
+    st.write("**Raw column names found in the Google Sheet:**")
+    st.code("\n".join(raw_df.columns.tolist()))
+    st.write("**How each dashboard field mapped to a sheet column:**")
+    st.json({k: (v if v else "⚠️ NOT FOUND") for k, v in resolved_cols.items()})
 
 months_present = sorted(
     {r["month"] for r in rows if r["month"]},
