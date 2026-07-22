@@ -21,24 +21,28 @@ DEFAULT_SHEET_ID = "1u722Jf7tTX5l195AHxSU_fMHOQdZacoeAlLGqmgdPFc"
 DEFAULT_SHEET_NAME = "Raw Data"
 TEMPLATE_PATH = Path(__file__).parent / "assets" / "dashboard_template.html"
 
-st.set_page_config(page_title="Margin Dashboard", layout="wide", page_icon="📊")
-st.markdown("<style>.stApp{background:#0b1220;}</style>", unsafe_allow_html=True)
+st.set_page_config(page_title="Margin Dashboard", layout="wide", page_icon="📊", initial_sidebar_state="collapsed")
+st.markdown("""
+<style>
+.stApp{background:#0b1220;}
+[data-testid="collapsedControl"]{display:none;}
+section[data-testid="stSidebar"]{display:none;}
+div.block-container{padding-top:1rem;}
+div.stButton > button{
+  background:#17233a; color:#e7ecf5; border:1px solid #223252; border-radius:6px;
+}
+div.stButton > button:hover{border-color:#d9a441; color:#d9a441;}
+</style>
+""", unsafe_allow_html=True)
 
-# ----------------------------------------------------------------------
-# SIDEBAR
-# ----------------------------------------------------------------------
-st.sidebar.header("⚙️ Data Source")
-sheet_id = st.sidebar.text_input("Google Sheet ID", value=DEFAULT_SHEET_ID)
-sheet_name = st.sidebar.text_input("Tab name", value=DEFAULT_SHEET_NAME)
+sheet_id = DEFAULT_SHEET_ID
+sheet_name = DEFAULT_SHEET_NAME
 
-refresh_seconds = st.sidebar.slider("Auto-refresh every (seconds)", min_value=10, max_value=120, value=20, step=5)
-
-if st.sidebar.button("🔄 Force refresh now"):
-    st.cache_data.clear()
-    st.rerun()
-
-st.sidebar.caption("Sheet must stay shared as 'Anyone with link can view'. Har refresh pe latest sheet data khinchta hai.")
-st.sidebar.caption(f"Last loaded: {datetime.now().strftime('%d %b %Y, %I:%M:%S %p')}")
+_, refresh_col = st.columns([8, 1])
+with refresh_col:
+    if st.button("🔄 Refresh"):
+        st.cache_data.clear()
+        st.rerun()
 
 # ----------------------------------------------------------------------
 # DATA LOADING
@@ -48,7 +52,7 @@ def build_csv_url(sheet_id: str, sheet_name: str) -> str:
     return f"https://docs.google.com/spreadsheets/d/{sheet_id}/gviz/tq?tqx=out:csv&sheet={encoded_name}"
 
 
-@st.cache_data(ttl=15, show_spinner="Google Sheet se live data la raha hu...")
+@st.cache_data(ttl=60, show_spinner="Google Sheet se data la raha hu...")
 def load_raw_data(sheet_id: str, sheet_name: str) -> pd.DataFrame:
     url = build_csv_url(sheet_id, sheet_name)
     df = pd.read_csv(url)
@@ -219,10 +223,5 @@ final_html = (
     .replace("__PROJECT_JSON__", json.dumps(project_data, default=str))
     .replace("__PERIOD_LABEL__", period_label)
 )
-
-# Auto-refresh the whole Streamlit page (reruns Python -> re-fetches sheet
-# once the 15s cache expires) so data stays near-live without extra packages.
-refresh_ms = int(refresh_seconds * 1000)
-components.html(f"<script>setTimeout(function(){{ window.parent.location.reload(); }}, {refresh_ms});</script>", height=0)
 
 components.html(final_html, height=3200, scrolling=True)
