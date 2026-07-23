@@ -19,7 +19,7 @@ import streamlit.components.v1 as components
 # CONFIG
 # ----------------------------------------------------------------------
 DEFAULT_SHEET_ID = "1u722Jf7tTX5l195AHxSU_fMHOQdZacoeAlLGqmgdPFc"
-DEFAULT_SHEET_NAME = "Raw Data-1"
+DEFAULT_SHEET_NAME = "Raw Data"
 TEMPLATE_PATH = Path(__file__).parent / "assets" / "dashboard_template.html"
 
 st.set_page_config(page_title="Margin Dashboard", layout="wide", page_icon="📊", initial_sidebar_state="collapsed")
@@ -137,6 +137,8 @@ COLUMN_TARGETS = {
     "Client": ["Client"],
     "ClientSSC": ["Client (With SSC)"],
     "Service": ["Service"],
+    "FY": ["FY", "Financial Year"],
+    "Quarter": ["Quater", "Quarter", "Qtr"],
     "Month": ["Month"],
     "ExamStartDate": ["Exam Start Date", "Exam Date", "Start Date"],
     "ExamNameDate": ["Exam Name & Date", "Exam Name"],
@@ -257,8 +259,11 @@ def prepare_data(raw: pd.DataFrame):
         fallback = pd.Series([f"ROW{i}" for i in range(len(df))], index=df.index)
     df["_ProjectCode"] = pc.where(~pc.isin(["", "nan", "None"]), fallback)
 
+    quarter_col = cols.get("Quarter")
     exam_start_col = cols.get("ExamStartDate")
-    if exam_start_col:
+    if quarter_col:
+        df["_Quarter"] = df[quarter_col].fillna("").astype(str).str.strip()
+    elif exam_start_col:
         df["_Quarter"] = derive_quarter(df[exam_start_col])
     else:
         df["_Quarter"] = ""
@@ -310,6 +315,7 @@ def build_rows(df: pd.DataFrame, cols: dict):
         "client": _series_or_blank(df, cols, "Client", n),
         "clientSSC": _series_or_blank(df, cols, "ClientSSC", n),
         "service": _series_or_blank(df, cols, "Service", n),
+        "fy": _series_or_blank(df, cols, "FY", n),
         "month": _series_or_blank(df, cols, "Month", n),
         "quarter": df["_Quarter"].fillna("").astype(str),
         "examNameDate": _series_or_blank(df, cols, "ExamNameDate", n),
