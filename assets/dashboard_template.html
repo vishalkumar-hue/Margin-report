@@ -433,11 +433,15 @@
 const ROWS = __ROWS_JSON__;
 const MONTH_ORDER = __MONTH_ORDER_JSON__;
 
-// fmtCr: formats a raw rupee number into "₹X.XX Cr" for KPI/table display.
+// fmtCr: formats a raw rupee number for display - shows in "₹X.XX Cr" only
+// when the amount is 1 Cr (1e7) or more; below that it shows in "₹X.XX L" (Lakh) instead.
 const fmtCr = v => {
   if (v === null || v === undefined || isNaN(v)) return '-';
-  const cr = v/1e7;
-  return '₹' + cr.toFixed(2) + ' Cr';
+  const abs = Math.abs(v);
+  if (abs >= 1e7){
+    return '₹' + (v/1e7).toFixed(2) + ' Cr';
+  }
+  return '₹' + (v/1e5).toFixed(2) + ' L';
 };
 // fmtNum: formats a number using Indian digit grouping (e.g. 12,34,567).
 const fmtNum = v => Number(v).toLocaleString('en-IN');
