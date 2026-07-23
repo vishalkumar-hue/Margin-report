@@ -3,7 +3,8 @@ Margin Dashboard - Live Streamlit App (exact original UI + full filter set)
 Fetches live data from a public Google Sheet, cleans it, and sends
 row-level data to the ORIGINAL Chart.js HTML/CSS dashboard, which now
 does all filtering + aggregation client-side across ALL tabs
-(Overview, Monthly Trend, Client Analysis, Service Analysis, Status Overview, Project-wise).
+(Overview, Monthly Trend, Client Analysis, Service Analysis, Status Overview,
+Comparison, Quarter Comparison, Project-wise).
 """
 
 import json
@@ -75,17 +76,45 @@ def clean_numeric(series: pd.Series) -> pd.Series:
 # ----------------------------------------------------------------------
 # MANUAL COLUMN OVERRIDES (most reliable fix when name-matching keeps failing)
 # ----------------------------------------------------------------------
-# If a column keeps showing blank despite existing in the sheet, it usually
-# means the auto name-matching below isn't finding it (hidden characters,
-# different punctuation, a duplicate header elsewhere in the sheet, etc).
-# The bullet-proof fix: tell it the column's LETTER exactly as it appears in
-# the "Raw Data" tab (open the sheet, check the column letter above the
-# header - A/B/C.../U...), and it will use that column directly - no name
-# matching involved at all.
+# The "Final Data" sheet has SEVERAL columns that share the same header text
+# (e.g. two columns literally titled "Service" and two titled "Month"). When
+# that CSV is loaded, pandas silently renames the second occurrence to
+# "Service.1" / "Month.1" - so plain name-matching below can only ever find
+# the FIRST occurrence, even when the second one is the one you actually want.
+# That was causing three real bugs, now fixed via position (column-letter)
+# overrides, verified against Final_Margin_Report_-_Final_Data.csv:
+#
+#   - "Month"   -> was resolving to the col with "Apr_2026" style values.
+#                  month_sort_key() only understands "Apr_26" (%b_%y), so
+#                  EVERY month failed to parse and the Monthly Trend /
+#                  Overview trend charts sorted incorrectly. Fixed to point
+#                  at column AT, which holds the "Apr_26" short form.
+#   - "Service" -> was resolving to the raw code-style value (e.g.
+#                  "LIVECCTV") instead of the human-readable one
+#                  (e.g. "LIVE CCTV") used everywhere else (Client, Exam
+#                  Name, Project Code columns). ~17% of rows had a
+#                  mismatched/ugly Service label. Fixed to point at column
+#                  AQ, the human-readable duplicate.
+#   - "OpGuardActualCamVoipNode" -> the override here used to say column
+#                  "U", which is actually "sum Local Purchase", not the
+#                  Op/Guard/Cam/VOIP field at all. Fixed to column BE,
+#                  the real "Op/Guard Actual Count/Cam Count/VOIP" column.
+#   - "ProjectCode" -> the sheet's real "Project Code" column was never
+#                  being matched by name (target text didn't line up), so
+#                  every row was silently getting a FAKE synthetic code
+#                  (Client+Exam+Service concatenated) instead of the real
+#                  one. Fixed to point at column AU, the actual Project Code.
+#
+# IMPORTANT: these are POSITION-based. If columns get added/removed/reordered
+# in the sheet later, re-check the letter for each field (open the sheet,
+# look at the column letter above the header) and update below.
 #
 # Leave a value as "" to fall back to automatic name-based matching instead.
 MANUAL_COLUMN_OVERRIDES = {
-    "OpGuardActualCamVoipNode": "U",  # <- from your screenshot; update the letter if it's different in the "Raw Data" tab
+    "Month": "AT",
+    "Service": "AQ",
+    "OpGuardActualCamVoipNode": "BE",
+    "ProjectCode": "AU",
 }
 
 
@@ -104,7 +133,12 @@ def find_col(df: pd.DataFrame, target: str):
     stray spaces, different slash/dash spacing, or slightly different
     casing than what's typed here (e.g. 'Biling Status' vs 'Billing Status',
     or 'Op / Guard Actual Count / Cam Count / VOIP / Node' vs
-    'Op/Guard Actual Count/Cam Count/VOIP/Node')."""
+    'Op/Guard Actual Count/Cam Count/VOIP/Node').
+    NOTE: when a header is duplicated in the sheet, pandas renames the 2nd+
+    occurrence to 'Header.1', 'Header.2', etc - those will NOT strict-match
+    the plain target name here, only the first occurrence will. Use
+    MANUAL_COLUMN_OVERRIDES (column letter) when you specifically need a
+    later duplicate."""
     def normalize(s: str) -> str:
         return "".join(ch for ch in s.strip().lower() if ch.isalnum())
 
@@ -133,7 +167,7 @@ def find_col_loose(df: pd.DataFrame, target: str):
 
 # Logical field -> possible sheet header(s) to try, in order.
 COLUMN_TARGETS = {
-    "ProjectCode": ["Project Code Revenue Report"],
+    "ProjectCode": ["Project Code Revenue Report", "Project Code", "Correct Project Code"],
     "Client": ["Client"],
     "ClientSSC": ["Client (With SSC)"],
     "Service": ["Service"],
@@ -160,6 +194,7 @@ COLUMN_TARGETS = {
         "Op/Guard Actual Count/Cam Count/VOIP/Node",
         "Op/Guard Actual Count / Cam Count / VOIP / Node",
         "Op/Guard Actual Count/Cam Count/VOIP/Node ",
+        "Op/Guard Actual Count/Cam Count/VOIP",
     ],
 }
 
