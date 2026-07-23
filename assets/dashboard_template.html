@@ -160,21 +160,6 @@
   .pill.mid{background:rgba(217,164,65,0.15); color:var(--gold);}
   .live-dot{display:inline-block; width:8px; height:8px; border-radius:50%; background:var(--teal); margin-right:6px; box-shadow:0 0 6px var(--teal); animation:pulse 1.6s infinite;}
   @keyframes pulse{0%{opacity:1;}50%{opacity:0.35;}100%{opacity:1;}}
-  /* ---- Alerts & Targets panel (Overview tab) ---- */
-  /* .target-input{display:flex; align-items:center; gap:8px; margin-bottom:12px; flex-wrap:wrap;}
-  .target-input label{font-size:12px; color:var(--muted);}
-  .target-input input[type=number]{
-    width:70px; background:var(--panel-2); color:var(--text); border:1px solid var(--border);
-    border-radius:6px; padding:6px 8px; font-size:13px;
-  }
-  .alert-item{
-    padding:8px 10px; border-radius:6px; font-size:12.5px; margin-bottom:6px;
-    background:rgba(255,255,255,0.03);
-  }
-  .alert-item.bad{background:rgba(224,102,95,0.10); color:var(--coral);}
-  .alert-item.good{background:rgba(51,184,168,0.10); color:var(--teal);}
-  .alert-item[data-drill]{cursor:pointer;}
-  .alert-item[data-drill]:hover{background:rgba(255,255,255,0.07);} */
   /* ---- Comparison tab ---- */
   .cmp-controls select{
     background:var(--panel-2); color:var(--text); border:1px solid var(--border);
@@ -219,16 +204,6 @@
   <div id="tab-overview" class="tabpage active">
 
   <div class="kpis" id="kpiRow"></div>
-
-  <div class="card">
-    <h3>Alerts &amp; Targets <span class="tag">click an alert to drill down</span></h3>
-    <div class="target-input">
-      <label for="marginTargetInput">Margin % Target</label>
-      <input type="number" id="marginTargetInput" value="50" min="0" max="100">
-      <span style="font-size:11.5px; color:var(--muted);">clients / services / months below this get flagged here</span>
-    </div>
-    <div id="alertsList"></div>
-  </div>
 
   <div class="grid">
     <div class="card">
@@ -889,56 +864,6 @@ function renderInvoice(){
   });
 }
 
-// renderAlerts: "Alerts & Targets" panel on the Overview tab. Flags any
-// client / service / month whose Margin % is below the target the user set
-// (default 50%), plus a headline count of projects currently at negative
-// margin. Clicking a flagged item drills straight into the Project-wise tab.
-function renderAlerts(){
-  const listEl = document.getElementById('alertsList');
-  if (!listEl) return;
-  const rows = getFilteredRows();
-  const targetInput = document.getElementById('marginTargetInput');
-  const target = targetInput ? (parseFloat(targetInput.value) || 0) : 50;
-
-  const items = [];
-
-  const negCount = rows.filter(r => (r.margin||0) < 0).length;
-  if (negCount > 0){
-    items.push({text: negCount + ' project(s) are currently running at a NEGATIVE margin', cls:'bad'});
-  }
-
-  const clientAgg = [...aggregateBy(rows, 'client')].filter(c=>c.MarginPct < target).sort((a,b)=>a.MarginPct-b.MarginPct).slice(0,5);
-  clientAgg.forEach(c=>{
-    items.push({text: c.key + ' — margin ' + c.MarginPct.toFixed(1) + '% is below the ' + target + '% target', cls:'bad', drill:{key:'client', value:c.key}});
-  });
-
-  const serviceAgg = [...aggregateBy(rows, 'service')].filter(s=>s.MarginPct < target).sort((a,b)=>a.MarginPct-b.MarginPct).slice(0,5);
-  serviceAgg.forEach(s=>{
-    items.push({text: s.key + ' (service) — margin ' + s.MarginPct.toFixed(1) + '% is below the ' + target + '% target', cls:'bad', drill:{key:'service', value:s.key}});
-  });
-
-  const monthAgg = [...aggregateBy(rows, 'month')].filter(m=>m.MarginPct < target).sort((a,b)=>a.MarginPct-b.MarginPct);
-  monthAgg.forEach(m=>{
-    items.push({text: m.key + ' (month) — margin ' + m.MarginPct.toFixed(1) + '% is below the ' + target + '% target', cls:'bad', drill:{key:'month', value:m.key}});
-  });
-
-  listEl.innerHTML = '';
-  if (items.length === 0){
-    listEl.innerHTML = '<div class="alert-item good">All clear — nothing below target right now.</div>';
-    return;
-  }
-  items.forEach(it=>{
-    const div = document.createElement('div');
-    div.className = 'alert-item ' + (it.cls||'');
-    div.textContent = it.text;
-    if (it.drill){
-      div.setAttribute('data-drill','1');
-      div.addEventListener('click', ()=> drillFilter(it.drill.key, it.drill.value));
-    }
-    listEl.appendChild(div);
-  });
-}
-
 // renderTable: fills the "Client-wise Summary" table on the Overview tab.
 function renderTable(){
   const tbody = document.querySelector('#clientTable tbody');
@@ -957,7 +882,6 @@ function renderTable(){
 // renderAll: redraws every widget on the Overview tab (called whenever filters change).
 function renderAll(){
   renderKPIs();
-  renderAlerts();
   renderTrend();
   renderStatus();
   renderClient();
@@ -1453,8 +1377,6 @@ document.getElementById('posOnly').addEventListener('change', e=>{
   if(projPosOnly){ projNegOnly = false; document.getElementById('negOnly').checked = false; }
   renderProjectTable();
 });
-
-document.getElementById('marginTargetInput').addEventListener('input', renderAlerts);
 
 // ---- initial page load ----
 buildFilterBar();
