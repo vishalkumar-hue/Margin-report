@@ -766,8 +766,8 @@ function renderKPIs(){
   const totalRevenue = rows.reduce((a,b)=>a+(b.revenue||0),0);
   const totalProjects = rows.length;
   const avgMargin = rows.length ? (rows.reduce((a,b)=>a+(b.marginPct||0),0)/rows.length) : 0;
-  const reviewAgg = aggregateCount(rows, 'reviewInvoice');
-  const pendingCount = reviewAgg.find(i=>/pending/i.test(i.key))?.Count || 0;
+  const invoiceAgg = aggregateCount(rows, 'invoiceStatus');
+const pendingCount = invoiceAgg.find(i=>/pending/i.test(i.key))?.Count || 0;
   const statusAgg = aggregateCount(rows, 'projectStatus');
   const activeCount = statusAgg.find(p=>/active/i.test(p.key))?.Count || 0;
 
