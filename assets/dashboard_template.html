@@ -445,7 +445,7 @@ const fmtCr = v => {
   if (abs >= 1e5){
     return '₹' + (v/1e5).toFixed(2) + ' L';
   }
-  return '₹' + (v/1e3).toFixed(2) + ' Hazar';
+  return '₹' + (v/1e3).toFixed(2) + ' K';
 };
 // fmtNum: formats a number using Indian digit grouping (e.g. 12,34,567).
 const fmtNum = v => Number(v).toLocaleString('en-IN');
