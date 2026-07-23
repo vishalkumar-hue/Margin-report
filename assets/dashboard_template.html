@@ -362,6 +362,7 @@
         <label for="cmpDimension">Compare by</label>
         <select id="cmpDimension">
           <option value="month">Month</option>
+          <option value="quarter">Quarter</option>
           <option value="client">Client</option>
           <option value="service">Service</option>
         </select>
@@ -445,7 +446,7 @@ const fmtCr = v => {
   if (abs >= 1e5){
     return '₹' + (v/1e5).toFixed(2) + ' L';
   }
-  return '₹' + (v/1e3).toFixed(2) + ' K';
+  return '₹' + (v/1e3).toFixed(2) + ' Hazar';
 };
 // fmtNum: formats a number using Indian digit grouping (e.g. 12,34,567).
 const fmtNum = v => Number(v).toLocaleString('en-IN');
@@ -459,15 +460,26 @@ const COLORS = {
 };
 const PALETTE = ['#d9a441','#33b8a8','#e0665f','#8b7ee8','#4f8bd0','#5cc96a','#e0a8d0','#e0d05f','#6fa8e0','#c98b5c','#8adfd4','#b98ae0'];
 
+// quarterSortKey: turns a "Q1-2026" style label into a sortable number
+// (year*10 + quarter) so Quarter filters/dropdowns/comparisons order
+// chronologically instead of A-Z (which would wrongly put Q1-2026 before Q4-2025).
+function quarterSortKey(q){
+  const m = /Q(\d+)\D+(\d{4})/.exec(String(q||''));
+  if (!m) return Number.MAX_SAFE_INTEGER;
+  return parseInt(m[2],10)*10 + parseInt(m[1],10);
+}
+
 // ---------------- Generic filter system (shared across all tabs) ----------------
 // FILTER_DEFS: describes every filter shown in the top filter bar -
 // key = internal id, label = shown to user, field = matching key in each row object,
 // order (optional) = fixed sort order for values (used for Month so it doesn't sort A-Z).
 const FILTER_DEFS = [
-  {key:'month', label:'Month', field:'month', order: MONTH_ORDER},
+  {key:'fy', label:'FY', field:'fy'},
   {key:'quarter', label:'Quarter', field:'quarter'},
+  {key:'month', label:'Month', field:'month', order: MONTH_ORDER},
   {key:'service', label:'Service', field:'service'},
   {key:'client', label:'Client', field:'client'},
+  {key:'clientSSC', label:'Client (With SSC)', field:'clientSSC'},
   {key:'projectCode', label:'Project Code', field:'projectCode'},
   {key:'projectStatus', label:'Project Status', field:'projectStatus'},
   {key:'invoiceStatus', label:'Invoice Status', field:'invoiceStatus'},
@@ -491,6 +503,8 @@ function uniqueValues(field, order){
   if (order && order.length){
     const idx = new Map(order.map((m,i)=>[m,i]));
     vals.sort((a,b) => (idx.has(a)?idx.get(a):999) - (idx.has(b)?idx.get(b):999));
+  } else if (field === 'quarter'){
+    vals.sort((a,b) => quarterSortKey(a) - quarterSortKey(b));
   } else {
     vals.sort();
   }
@@ -1188,6 +1202,8 @@ function populateCmpSelects(){
   if (dim === 'month'){
     const idx = new Map(MONTH_ORDER.map((m,i)=>[m,i]));
     values.sort((a,b)=> (idx.has(a)?idx.get(a):999) - (idx.has(b)?idx.get(b):999));
+  } else if (dim === 'quarter'){
+    values.sort((a,b)=> quarterSortKey(a) - quarterSortKey(b));
   } else {
     values.sort();
   }
