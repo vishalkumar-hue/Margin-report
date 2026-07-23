@@ -198,6 +198,7 @@
     <button class="tabbtn" data-tab="services">Service Analysis</button>
     <button class="tabbtn" data-tab="status">Status Overview</button>
     <button class="tabbtn" data-tab="comparison">Comparison</button>
+    <button class="tabbtn" data-tab="quartercomp">Quarter Comparison</button>
     <button class="tabbtn" data-tab="projects">Project-wise</button>
   </div>
 
@@ -263,7 +264,7 @@
     <h3>Monthly Trend Table <span class="tag" id="monthlyTableTag">months</span></h3>
     <div class="scroll-table">
     <table id="monthlyTable">
-      <thead><tr><th>Month</th><th class="num">Revenue</th><th class="num">Margin</th><th class="num">Margin %</th><th class="num">Projects</th></tr></thead>
+      <thead><tr><th>Month</th><th class="num">Revenue</th><th class="num">Margin</th><th class="num">Margin %</th><th class="num">Projects</th><th class="num">MoM Revenue Δ</th><th class="num">MoM Margin % Δ</th></tr></thead>
       <tbody></tbody>
     </table>
     </div>
@@ -356,7 +357,7 @@
   <div id="tab-comparison" class="tabpage">
 
   <div class="card">
-    <h3>Comparison Mode <span class="tag">month vs month, client vs client, service vs service</span></h3>
+    <h3>Comparison Mode <span class="tag">compare 2 or more months, quarters, clients or services side by side</span></h3>
     <div class="search-row cmp-controls">
       <div class="cmp-field">
         <label for="cmpDimension">Compare by</label>
@@ -367,13 +368,17 @@
           <option value="service">Service</option>
         </select>
       </div>
-      <div class="cmp-field">
-        <label for="cmpA">Group A</label>
-        <select id="cmpA"></select>
-      </div>
-      <div class="cmp-field">
-        <label for="cmpB">Group B</label>
-        <select id="cmpB"></select>
+      <div class="cmp-field multiselect" style="min-width:260px;">
+        <label>Groups to compare</label>
+        <button type="button" class="ms-btn" id="cmpGroupsBtn">Select groups</button>
+        <div class="ms-panel" id="cmpGroupsPanel">
+          <input type="text" class="ms-search" id="cmpGroupsSearch" placeholder="Search...">
+          <div class="ms-actions">
+            <button type="button" id="cmpGroupsAll">Select all</button>
+            <button type="button" id="cmpGroupsClear">Clear</button>
+          </div>
+          <div class="ms-list" id="cmpGroupsList"></div>
+        </div>
       </div>
     </div>
   </div>
@@ -383,6 +388,37 @@
   <div class="card">
     <h3>Side-by-Side <span class="tag">revenue, margin, margin %, projects</span></h3>
     <div class="chart-box tall"><canvas id="cmpChart"></canvas></div>
+  </div>
+
+  <div class="card">
+    <h3>Comparison Table <span class="tag" id="cmpTableTag">groups, vs first selected</span></h3>
+    <div class="scroll-table">
+    <table id="cmpTable">
+      <thead><tr><th>Group</th><th class="num">Revenue</th><th class="num">Revenue Δ%</th><th class="num">Margin</th><th class="num">Margin %</th><th class="num">Margin % Δ (pts)</th><th class="num">Projects</th></tr></thead>
+      <tbody></tbody>
+    </table>
+    </div>
+  </div>
+
+  </div>
+
+  <div id="tab-quartercomp" class="tabpage">
+
+  <div class="kpis" id="quarterKpiRow"></div>
+
+  <div class="card">
+    <h3>Revenue, Margin &amp; Margin % by Quarter <span class="tag">quarter-on-quarter</span></h3>
+    <div class="chart-box tall"><canvas id="quarterChart"></canvas></div>
+  </div>
+
+  <div class="card">
+    <h3>Quarter-wise Table <span class="tag" id="quarterTableTag">quarters</span></h3>
+    <div class="scroll-table">
+    <table id="quarterTable">
+      <thead><tr><th>Quarter</th><th class="num">Revenue</th><th class="num">Margin</th><th class="num">Margin %</th><th class="num">Projects</th><th class="num">QoQ Revenue Δ%</th><th class="num">QoQ Margin % Δ (pts)</th></tr></thead>
+      <tbody></tbody>
+    </table>
+    </div>
   </div>
 
   </div>
@@ -527,7 +563,8 @@ function renderTab(tabId){
   else if (tabId === 'tab-clients') renderClientsTab();
   else if (tabId === 'tab-services') renderServicesTab();
   else if (tabId === 'tab-status') renderStatusTab();
-  else if (tabId === 'tab-comparison') populateCmpSelects();
+  else if (tabId === 'tab-comparison') populateCmpGroups();
+  else if (tabId === 'tab-quartercomp') renderQuarterTab();
   else if (tabId === 'tab-projects') renderProjectTab();
 }
 
@@ -991,10 +1028,15 @@ function renderMonthlyChart(agg){
 function renderMonthlyTable(agg){
   const tbody = document.querySelector('#monthlyTable tbody');
   tbody.innerHTML = '';
-  agg.forEach(m=>{
+  agg.forEach((m,i)=>{
     const tr = document.createElement('tr');
     const pillClass = m.MarginPct >= 60 ? 'good' : (m.MarginPct >=0 ? 'mid':'bad');
-    tr.innerHTML = `<td>${m.key}</td><td class="num">${fmtCr(m.Revenue)}</td><td class="num">${fmtCr(m.Margin)}</td><td class="num"><span class="pill ${pillClass}">${m.MarginPct.toFixed(1)}%</span></td><td class="num">${fmtNum(m.Projects)}</td>`;
+    const prev = i>0 ? agg[i-1] : null;
+    const revDelta = (prev && prev.Revenue) ? ((m.Revenue-prev.Revenue)/Math.abs(prev.Revenue)*100) : null;
+    const mpDelta = prev ? (m.MarginPct - prev.MarginPct) : null;
+    const revDeltaHtml = revDelta===null ? '-' : `<span class="${revDelta>=0?'up':'down'}">${revDelta>=0?'+':''}${revDelta.toFixed(1)}%</span>`;
+    const mpDeltaHtml = mpDelta===null ? '-' : `<span class="${mpDelta>=0?'up':'down'}">${mpDelta>=0?'+':''}${mpDelta.toFixed(1)} pts</span>`;
+    tr.innerHTML = `<td>${m.key}</td><td class="num">${fmtCr(m.Revenue)}</td><td class="num">${fmtCr(m.Margin)}</td><td class="num"><span class="pill ${pillClass}">${m.MarginPct.toFixed(1)}%</span></td><td class="num">${fmtNum(m.Projects)}</td><td class="num">${revDeltaHtml}</td><td class="num">${mpDeltaHtml}</td>`;
     tbody.appendChild(tr);
   });
   document.getElementById('monthlyTableTag').textContent = agg.length + ' months';
@@ -1189,91 +1231,259 @@ function renderStatusTab(){
   renderStatusTable('statusReviewTable', reviewAgg);
 }
 
-// ---------------- Comparison tab (month vs month, client vs client, service vs service) ----------------
+// ---------------- Quarter Comparison tab (quarter-on-quarter, mirrors Monthly Trend) ----------------
+function renderQuarterKPIs(agg){
+  const row = document.getElementById('quarterKpiRow');
+  row.innerHTML = '';
+  const totalRevenue = agg.reduce((a,b)=>a+b.Revenue,0);
+  const totalMargin = agg.reduce((a,b)=>a+b.Margin,0);
+  const bestQ = agg.length ? [...agg].sort((a,b)=>b.MarginPct-a.MarginPct)[0] : null;
+  const last = agg.length ? agg[agg.length-1] : null;
+  const prevLast = agg.length>1 ? agg[agg.length-2] : null;
+  const qoqRev = (last && prevLast && prevLast.Revenue) ? ((last.Revenue-prevLast.Revenue)/Math.abs(prevLast.Revenue)*100) : null;
+  const qoqMp = (last && prevLast) ? (last.MarginPct-prevLast.MarginPct) : null;
+  const items = [
+    {label:'Total Revenue', value: fmtCr(totalRevenue)},
+    {label:'Total Margin', value: fmtCr(totalMargin)},
+    {label:'Quarters in View', value: fmtNum(agg.length)},
+    {label:'Best Margin % Quarter', value: bestQ ? bestQ.key : '-'},
+    {label:'Latest QoQ Revenue Growth', value: qoqRev===null?'-':(qoqRev>=0?'+':'')+qoqRev.toFixed(1)+'%', cls: qoqRev===null?'':(qoqRev>=0?'up':'down')},
+    {label:'Latest QoQ Margin % Change', value: qoqMp===null?'-':(qoqMp>=0?'+':'')+qoqMp.toFixed(1)+' pts', cls: qoqMp===null?'':(qoqMp>=0?'up':'down')},
+  ];
+  items.forEach(it=>{
+    const div = document.createElement('div'); div.className='kpi';
+    div.innerHTML = `<div class="label">${it.label}</div><div class="value">${it.value}</div>` + (it.cls!==undefined?`<div class="delta ${it.cls||''}"></div>`:'');
+    row.appendChild(div);
+  });
+}
 
-// populateCmpSelects: rebuilds Group A / Group B dropdown options whenever the
-// comparison dimension changes or the global filters change, preserving the
-// current selection where it still exists.
-function populateCmpSelects(){
+function renderQuarterChart(agg){
+  destroy('quarter');
+  const ctx = document.getElementById('quarterChart');
+  const labels = agg.map(q=>q.key);
+  charts.quarter = new Chart(ctx, {
+    data:{
+      labels,
+      datasets:[
+        {type:'bar', label:'Revenue (Cr)', data: agg.map(q=>+(q.Revenue/1e7).toFixed(2)), backgroundColor:'rgba(79,139,208,0.55)', borderRadius:5, yAxisID:'y'},
+        {type:'bar', label:'Margin (Cr)', data: agg.map(q=>+(q.Margin/1e7).toFixed(2)), backgroundColor:'rgba(217,164,65,0.7)', borderRadius:5, yAxisID:'y'},
+        {type:'line', label:'Margin %', data: agg.map(q=>q.MarginPct), borderColor:COLORS.teal, backgroundColor:COLORS.teal, tension:0.35, yAxisID:'y1', pointRadius:4}
+      ]
+    },
+    options:{
+      responsive:true, maintainAspectRatio:false,
+      interaction:{mode:'index', intersect:false},
+      scales:{
+        y:{position:'left', grid:{color:'rgba(255,255,255,0.06)'}, title:{display:true,text:'₹ Cr'}},
+        y1:{position:'right', grid:{display:false}, title:{display:true,text:'Margin %'}, min:0}
+      },
+      plugins:{legend:{position:'bottom', labels:{boxWidth:12}}},
+      onClick:(evt, elements)=>{ if(elements.length) drillFilter('quarter', labels[elements[0].index]); }
+    }
+  });
+}
+
+function renderQuarterTable(agg){
+  const tbody = document.querySelector('#quarterTable tbody');
+  tbody.innerHTML = '';
+  agg.forEach((q,i)=>{
+    const tr = document.createElement('tr');
+    const pillClass = q.MarginPct >= 60 ? 'good' : (q.MarginPct >=0 ? 'mid':'bad');
+    const prev = i>0 ? agg[i-1] : null;
+    const revDelta = (prev && prev.Revenue) ? ((q.Revenue-prev.Revenue)/Math.abs(prev.Revenue)*100) : null;
+    const mpDelta = prev ? (q.MarginPct - prev.MarginPct) : null;
+    const revDeltaHtml = revDelta===null ? '-' : `<span class="${revDelta>=0?'up':'down'}">${revDelta>=0?'+':''}${revDelta.toFixed(1)}%</span>`;
+    const mpDeltaHtml = mpDelta===null ? '-' : `<span class="${mpDelta>=0?'up':'down'}">${mpDelta>=0?'+':''}${mpDelta.toFixed(1)} pts</span>`;
+    tr.innerHTML = `<td>${q.key}</td><td class="num">${fmtCr(q.Revenue)}</td><td class="num">${fmtCr(q.Margin)}</td><td class="num"><span class="pill ${pillClass}">${q.MarginPct.toFixed(1)}%</span></td><td class="num">${fmtNum(q.Projects)}</td><td class="num">${revDeltaHtml}</td><td class="num">${mpDeltaHtml}</td>`;
+    tbody.appendChild(tr);
+  });
+  document.getElementById('quarterTableTag').textContent = agg.length + ' quarters';
+}
+
+function renderQuarterTab(){
+  const rows = getFilteredRows();
+  const agg = [...aggregateBy(rows, 'quarter')].filter(q=>q.key && q.key !== '(blank)');
+  agg.sort((a,b)=> quarterSortKey(a.key) - quarterSortKey(b.key));
+  renderQuarterKPIs(agg);
+  renderQuarterChart(agg);
+  renderQuarterTable(agg);
+}
+
+// ---------------- Comparison tab (compare 2+ months/quarters/clients/services) ----------------
+
+// cmpSelectedGroups: the set of group keys currently ticked in the
+// "Groups to compare" multi-select for the Comparison tab.
+let cmpSelectedGroups = new Set();
+
+// populateCmpGroups: rebuilds the "Groups to compare" checklist whenever the
+// comparison dimension changes or the global filters change. Keeps
+// previously-ticked values where they still exist; otherwise defaults to the
+// top 3 groups by Revenue so the tab isn't empty on first load.
+function populateCmpGroups(){
   const dim = document.getElementById('cmpDimension').value;
   const rows = getFilteredRows();
   const agg = aggregateBy(rows, dim);
-  let values = agg.map(a=>a.key);
+  let sortedForOrder = [...agg];
   if (dim === 'month'){
     const idx = new Map(MONTH_ORDER.map((m,i)=>[m,i]));
-    values.sort((a,b)=> (idx.has(a)?idx.get(a):999) - (idx.has(b)?idx.get(b):999));
+    sortedForOrder.sort((a,b)=> (idx.has(a.key)?idx.get(a.key):999) - (idx.has(b.key)?idx.get(b.key):999));
   } else if (dim === 'quarter'){
-    values.sort((a,b)=> quarterSortKey(a) - quarterSortKey(b));
+    sortedForOrder.sort((a,b)=> quarterSortKey(a.key) - quarterSortKey(b.key));
   } else {
-    values.sort();
+    sortedForOrder.sort((a,b)=>b.Revenue-a.Revenue);
   }
-  const selA = document.getElementById('cmpA');
-  const selB = document.getElementById('cmpB');
-  const prevA = selA.value, prevB = selB.value;
-  const optionsHtml = values.map(v => `<option value="${v}">${v}</option>`).join('');
-  selA.innerHTML = optionsHtml;
-  selB.innerHTML = optionsHtml;
-  selA.value = values.includes(prevA) ? prevA : (values[0] || '');
-  selB.value = values.includes(prevB) ? prevB : (values.length>1 ? values[1] : (values[0] || ''));
+  const values = sortedForOrder.map(a=>a.key);
+
+  const stillValid = new Set(values.filter(v => cmpSelectedGroups.has(v)));
+  if (stillValid.size === 0 && values.length){
+    const byRevenue = [...agg].sort((a,b)=>b.Revenue-a.Revenue).slice(0,3).map(a=>a.key);
+    byRevenue.forEach(v=>stillValid.add(v));
+  }
+  cmpSelectedGroups = stillValid;
+
+  const listEl = document.getElementById('cmpGroupsList');
+  listEl.innerHTML = '';
+  values.forEach(v=>{
+    const row = document.createElement('label');
+    row.className = 'ms-option';
+    const cb = document.createElement('input');
+    cb.type = 'checkbox';
+    cb.value = v;
+    cb.checked = cmpSelectedGroups.has(v);
+    const span = document.createElement('span');
+    span.textContent = v;
+    row.appendChild(cb); row.appendChild(span);
+    listEl.appendChild(row);
+  });
+
+  updateCmpGroupsBtn();
   renderComparisonTab();
 }
 
-// renderComparisonTab: shows Revenue / Margin / Margin % / Projects for the
-// two selected groups side by side, with a % delta on each KPI.
+function updateCmpGroupsBtn(){
+  const btn = document.getElementById('cmpGroupsBtn');
+  const n = cmpSelectedGroups.size;
+  btn.textContent = n === 0 ? 'Select groups' : (n === 1 ? [...cmpSelectedGroups][0] : n + ' groups selected');
+  btn.classList.toggle('active', n>0);
+}
+
+document.getElementById('cmpGroupsBtn').addEventListener('click', (e)=>{
+  e.stopPropagation();
+  document.querySelectorAll('.ms-panel.open').forEach(p=>{ if(p.id!=='cmpGroupsPanel') p.classList.remove('open'); });
+  document.getElementById('cmpGroupsPanel').classList.toggle('open');
+});
+document.getElementById('cmpGroupsPanel').addEventListener('click', e=>e.stopPropagation());
+document.getElementById('cmpGroupsSearch').addEventListener('input', e=>{
+  const term = e.target.value.toLowerCase();
+  document.querySelectorAll('#cmpGroupsList .ms-option').forEach(opt=>{
+    opt.style.display = opt.textContent.toLowerCase().includes(term) ? '' : 'none';
+  });
+});
+document.getElementById('cmpGroupsAll').addEventListener('click', ()=>{
+  document.querySelectorAll('#cmpGroupsList .ms-option').forEach(opt=>{
+    if (opt.style.display !== 'none') opt.querySelector('input').checked = true;
+  });
+  cmpSelectedGroups = new Set(Array.from(document.querySelectorAll('#cmpGroupsList input:checked')).map(c=>c.value));
+  updateCmpGroupsBtn();
+  renderComparisonTab();
+});
+document.getElementById('cmpGroupsClear').addEventListener('click', ()=>{
+  document.querySelectorAll('#cmpGroupsList input').forEach(c=>c.checked=false);
+  cmpSelectedGroups = new Set();
+  updateCmpGroupsBtn();
+  renderComparisonTab();
+});
+document.getElementById('cmpGroupsList').addEventListener('change', ()=>{
+  cmpSelectedGroups = new Set(Array.from(document.querySelectorAll('#cmpGroupsList input:checked')).map(c=>c.value));
+  updateCmpGroupsBtn();
+  renderComparisonTab();
+});
+document.getElementById('cmpDimension').addEventListener('change', ()=>{
+  cmpSelectedGroups = new Set(); // dimension changed -> old selections don't apply, re-default
+  populateCmpGroups();
+});
+
+// renderComparisonTab: shows Revenue / Margin / Margin % / Projects for every
+// selected group, side by side in a chart + a table with each group's delta
+// vs the first selected group (the baseline).
 function renderComparisonTab(){
   const dim = document.getElementById('cmpDimension').value;
   const rows = getFilteredRows();
   const agg = aggregateBy(rows, dim);
   const map = new Map(agg.map(a=>[a.key, a]));
-  const aVal = document.getElementById('cmpA').value;
-  const bVal = document.getElementById('cmpB').value;
-  const A = map.get(aVal) || {Revenue:0, Margin:0, MarginPct:0, Projects:0};
-  const B = map.get(bVal) || {Revenue:0, Margin:0, MarginPct:0, Projects:0};
 
-  function pctDelta(a, b){
-    if (!a) return '-';
-    const d = ((b-a)/Math.abs(a))*100;
-    return (d>=0?'+':'') + d.toFixed(1) + '% vs ' + (aVal||'Group A');
-  }
-  function ptsDelta(a, b){
-    const d = b-a;
-    return (d>=0?'+':'') + d.toFixed(1) + ' pts vs ' + (aVal||'Group A');
+  let selected = Array.from(cmpSelectedGroups);
+  if (dim === 'month'){
+    const idx = new Map(MONTH_ORDER.map((m,i)=>[m,i]));
+    selected.sort((a,b)=> (idx.has(a)?idx.get(a):999) - (idx.has(b)?idx.get(b):999));
+  } else if (dim === 'quarter'){
+    selected.sort((a,b)=> quarterSortKey(a) - quarterSortKey(b));
+  } else {
+    selected.sort();
   }
 
+  const groups = selected.map(key => ({ key, ...(map.get(key) || {Revenue:0, Margin:0, MarginPct:0, Projects:0}) }));
+
+  // KPI row: total revenue/margin across selected groups + count of groups
   const row = document.getElementById('cmpKpiRow');
   row.innerHTML = '';
-  const items = [
-    {label:'Revenue — ' + (aVal||'-'), value: fmtCr(A.Revenue)},
-    {label:'Revenue — ' + (bVal||'-'), value: fmtCr(B.Revenue), delta: pctDelta(A.Revenue,B.Revenue), cls: B.Revenue>=A.Revenue?'up':'down'},
-    {label:'Margin % — ' + (aVal||'-'), value: A.MarginPct.toFixed(1)+'%'},
-    {label:'Margin % — ' + (bVal||'-'), value: B.MarginPct.toFixed(1)+'%', delta: ptsDelta(A.MarginPct,B.MarginPct), cls: B.MarginPct>=A.MarginPct?'up':'down'},
-    {label:'Projects — ' + (aVal||'-'), value: fmtNum(A.Projects)},
-    {label:'Projects — ' + (bVal||'-'), value: fmtNum(B.Projects)},
-  ];
-  items.forEach(it=>{
-    const div = document.createElement('div'); div.className='kpi';
-    div.innerHTML = `<div class="label">${it.label}</div><div class="value">${it.value}</div>` + (it.delta?`<div class="delta ${it.cls||''}">${it.delta}</div>`:'');
-    row.appendChild(div);
-  });
+  if (groups.length){
+    const totalRevenue = groups.reduce((a,b)=>a+b.Revenue,0);
+    const totalMargin = groups.reduce((a,b)=>a+b.Margin,0);
+    const best = [...groups].sort((a,b)=>b.MarginPct-a.MarginPct)[0];
+    const worst = [...groups].sort((a,b)=>a.MarginPct-b.MarginPct)[0];
+    const items = [
+      {label:'Groups Selected', value: fmtNum(groups.length)},
+      {label:'Combined Revenue', value: fmtCr(totalRevenue)},
+      {label:'Combined Margin', value: fmtCr(totalMargin)},
+      {label:'Best Margin %', value: best ? `${best.key} (${best.MarginPct.toFixed(1)}%)` : '-'},
+      {label:'Weakest Margin %', value: worst ? `${worst.key} (${worst.MarginPct.toFixed(1)}%)` : '-'},
+    ];
+    items.forEach(it=>{
+      const div = document.createElement('div'); div.className='kpi';
+      div.innerHTML = `<div class="label">${it.label}</div><div class="value">${it.value}</div>`;
+      row.appendChild(div);
+    });
+  }
 
+  // Chart: one dataset per selected group, across Revenue/Margin/Margin%/Projects
   destroy('cmp');
   const ctx = document.getElementById('cmpChart');
   charts.cmp = new Chart(ctx, {
     type:'bar',
     data:{
       labels:['Revenue (₹ Cr)','Margin (₹ Cr)','Margin %','Projects'],
-      datasets:[
-        {label: aVal || 'Group A', data:[+(A.Revenue/1e7).toFixed(2), +(A.Margin/1e7).toFixed(2), +A.MarginPct.toFixed(1), A.Projects], backgroundColor: PALETTE[4], borderRadius:5},
-        {label: bVal || 'Group B', data:[+(B.Revenue/1e7).toFixed(2), +(B.Margin/1e7).toFixed(2), +B.MarginPct.toFixed(1), B.Projects], backgroundColor: PALETTE[0], borderRadius:5}
-      ]
+      datasets: groups.map((g,i)=>({
+        label: g.key,
+        data: [+(g.Revenue/1e7).toFixed(2), +(g.Margin/1e7).toFixed(2), +g.MarginPct.toFixed(1), g.Projects],
+        backgroundColor: PALETTE[i % PALETTE.length],
+        borderRadius:5
+      }))
     },
     options:{responsive:true, maintainAspectRatio:false, plugins:{legend:{position:'bottom'}}}
   });
-}
 
-document.getElementById('cmpDimension').addEventListener('change', populateCmpSelects);
-document.getElementById('cmpA').addEventListener('change', renderComparisonTab);
-document.getElementById('cmpB').addEventListener('change', renderComparisonTab);
+  // Table: every selected group vs the FIRST selected group (baseline)
+  const tbody = document.querySelector('#cmpTable tbody');
+  tbody.innerHTML = '';
+  const baseline = groups.length ? groups[0] : null;
+  groups.forEach((g,i)=>{
+    const tr = document.createElement('tr');
+    let revDeltaHtml = '-', mpDeltaHtml = '';
+    if (i===0){
+      revDeltaHtml = '<span class="delta">baseline</span>';
+    } else if (baseline){
+      const revDelta = baseline.Revenue ? ((g.Revenue-baseline.Revenue)/Math.abs(baseline.Revenue)*100) : null;
+      revDeltaHtml = revDelta===null ? '-' : `<span class="${revDelta>=0?'up':'down'}">${revDelta>=0?'+':''}${revDelta.toFixed(1)}%</span>`;
+    }
+    const mpDelta = (baseline && i>0) ? (g.MarginPct - baseline.MarginPct) : null;
+    mpDeltaHtml = mpDelta===null ? (i===0 ? '-' : '-') : `<span class="${mpDelta>=0?'up':'down'}">${mpDelta>=0?'+':''}${mpDelta.toFixed(1)} pts</span>`;
+    const pillClass = g.MarginPct >= 60 ? 'good' : (g.MarginPct >=0 ? 'mid':'bad');
+    tr.innerHTML = `<td>${g.key}</td><td class="num">${fmtCr(g.Revenue)}</td><td class="num">${revDeltaHtml}</td><td class="num">${fmtCr(g.Margin)}</td><td class="num"><span class="pill ${pillClass}">${g.MarginPct.toFixed(1)}%</span></td><td class="num">${mpDeltaHtml}</td><td class="num">${fmtNum(g.Projects)}</td>`;
+    tbody.appendChild(tr);
+  });
+  document.getElementById('cmpTableTag').textContent = groups.length + ' groups, vs ' + (baseline ? baseline.key : 'first selected');
+}
 
 // ---------------- Tab switching ----------------
 document.querySelectorAll('.tabbtn').forEach(btn=>{
