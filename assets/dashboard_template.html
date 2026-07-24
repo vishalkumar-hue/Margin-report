@@ -4,6 +4,7 @@
 <meta charset="UTF-8">
 <title>Margin Dashboard</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/chartjs-plugin-datalabels/2.2.0/chartjs-plugin-datalabels.min.js"></script>
 <style>
   :root{
     --bg: #0b1220;
@@ -491,6 +492,14 @@ Chart.defaults.color = '#8ea0c2';
 Chart.defaults.font.family = "'Segoe UI', Arial, sans-serif";
 Chart.defaults.borderColor = 'rgba(255,255,255,0.06)';
 
+// Register the datalabels plugin globally, but keep it OFF by default so
+// any chart that doesn't explicitly configure it isn't affected.
+// Each chart below turns it on via its own `plugins.datalabels` block -
+// this is what makes the value show permanently on the chart instead of
+// only appearing on hover (the hover tooltip still works as before too).
+Chart.register(ChartDataLabels);
+Chart.defaults.set('plugins.datalabels', { display: false });
+
 const COLORS = {
   gold:'#d9a441', teal:'#33b8a8', coral:'#e0665f', violet:'#8b7ee8', blue:'#4f8bd0'
 };
@@ -808,11 +817,18 @@ function renderTrend(){
     options:{
       responsive:true, maintainAspectRatio:false,
       interaction:{mode:'index', intersect:false},
+      layout:{padding:{top:18}},
       scales:{
         y:{position:'left', grid:{color:'rgba(255,255,255,0.06)'}, title:{display:true,text:'₹ Cr'}},
         y1:{position:'right', grid:{display:false}, title:{display:true,text:'Margin %'}, min:0}
       },
-      plugins:{legend:{position:'bottom', labels:{boxWidth:12}}},
+      plugins:{
+        legend:{position:'bottom', labels:{boxWidth:12}},
+        datalabels:{
+          display:true, clip:true, color:'#e7ecf5', font:{size:10, weight:'600'}, anchor:'end', align:'top',
+          formatter:(v, ctx)=> ctx.dataset.type==='line' ? v.toFixed(1)+'%' : v
+        }
+      },
       onClick:(evt, elements)=>{ if(elements.length) drillFilter('month', labels[elements[0].index]); }
     }
   });
@@ -832,7 +848,11 @@ function renderStatus(){
       datasets:[{data: agg.map(p=>p.Count), backgroundColor: PALETTE, borderWidth:2, borderColor:'#121b2e'}]
     },
     options:{
-      responsive:true, maintainAspectRatio:false, plugins:{legend:{position:'bottom'}},
+      responsive:true, maintainAspectRatio:false,
+      plugins:{
+        legend:{position:'bottom'},
+        datalabels:{ display:true, color:'#fff', font:{size:11, weight:'700'}, formatter:(v)=> v }
+      },
       onClick:(evt, elements)=>{ if(elements.length) drillFilter('projectStatus', labels[elements[0].index]); }
     }
   });
@@ -854,7 +874,10 @@ function renderClient(){
     },
     options:{
       indexAxis:'y', responsive:true, maintainAspectRatio:false,
-      plugins:{legend:{display:false}},
+      plugins:{
+        legend:{display:false},
+        datalabels:{ display:true, clip:true, color:'#e7ecf5', font:{size:10, weight:'600'}, anchor:'end', align:'right', formatter:(v)=> v }
+      },
       scales:{x:{title:{display:true, text:'₹ Cr'}}},
       onClick:(evt, elements)=>{ if(elements.length) drillFilter('client', rawKeys[elements[0].index]); }
     }
@@ -876,7 +899,11 @@ function renderService(){
     },
     options:{
       responsive:true, maintainAspectRatio:false,
-      plugins:{legend:{display:false}},
+      layout:{padding:{top:18}},
+      plugins:{
+        legend:{display:false},
+        datalabels:{ display:true, clip:true, color:'#e7ecf5', font:{size:10, weight:'600'}, anchor:'end', align:'top', formatter:(v)=> v.toFixed(1)+'%' }
+      },
       scales:{x:{ticks:{autoSkip:false, maxRotation:45, minRotation:30}}, y:{title:{display:true,text:'%'}}},
       onClick:(evt, elements)=>{ if(elements.length) drillFilter('service', labels[elements[0].index]); }
     }
@@ -884,6 +911,8 @@ function renderService(){
 }
 
 // renderScatter: bubble chart of Revenue vs Margin % per project (bubble size ~ revenue).
+// NOTE: intentionally NO permanent datalabels here - with hundreds of project
+// points the numbers would overlap into an unreadable mess. Hover tooltip stays.
 function renderScatter(){
   destroy('scatter');
   const ctx = document.getElementById('scatterChart');
@@ -917,7 +946,11 @@ function renderInvoice(){
       datasets:[{data: agg.map(i=>i.Count), backgroundColor:[COLORS.teal, COLORS.gold, COLORS.coral, COLORS.violet], borderWidth:2, borderColor:'#121b2e'}]
     },
     options:{
-      responsive:true, maintainAspectRatio:false, plugins:{legend:{position:'bottom'}},
+      responsive:true, maintainAspectRatio:false,
+      plugins:{
+        legend:{position:'bottom'},
+        datalabels:{ display:true, color:'#fff', font:{size:11, weight:'700'}, formatter:(v)=> v }
+      },
       onClick:(evt, elements)=>{ if(elements.length) drillFilter('reviewInvoice', labels[elements[0].index]); }
     }
   });
@@ -1015,11 +1048,18 @@ function renderMonthlyChart(agg){
     options:{
       responsive:true, maintainAspectRatio:false,
       interaction:{mode:'index', intersect:false},
+      layout:{padding:{top:18}},
       scales:{
         y:{position:'left', grid:{color:'rgba(255,255,255,0.06)'}, title:{display:true,text:'₹ Cr'}},
         y1:{position:'right', grid:{display:false}, title:{display:true,text:'Margin %'}, min:0}
       },
-      plugins:{legend:{position:'bottom', labels:{boxWidth:12}}},
+      plugins:{
+        legend:{position:'bottom', labels:{boxWidth:12}},
+        datalabels:{
+          display:true, clip:true, color:'#e7ecf5', font:{size:10, weight:'600'}, anchor:'end', align:'top',
+          formatter:(v, ctx)=> ctx.dataset.type==='line' ? v.toFixed(1)+'%' : v
+        }
+      },
       onClick:(evt, elements)=>{ if(elements.length) drillFilter('month', labels[elements[0].index]); }
     }
   });
@@ -1087,7 +1127,10 @@ function renderClientAnalysisChart(agg){
     },
     options:{
       indexAxis:'y', responsive:true, maintainAspectRatio:false,
-      plugins:{legend:{display:false}},
+      plugins:{
+        legend:{display:false},
+        datalabels:{ display:true, clip:true, color:'#e7ecf5', font:{size:10, weight:'600'}, anchor:'end', align:'right', formatter:(v)=> v }
+      },
       scales:{x:{title:{display:true, text:'₹ Cr'}}},
       onClick:(evt, elements)=>{ if(elements.length) drillFilter('client', rawKeys[elements[0].index]); }
     }
@@ -1158,7 +1201,11 @@ function renderServiceAnalysisChart(agg){
     },
     options:{
       responsive:true, maintainAspectRatio:false,
-      plugins:{legend:{position:'bottom'}},
+      layout:{padding:{top:18}},
+      plugins:{
+        legend:{position:'bottom'},
+        datalabels:{ display:true, clip:true, color:'#e7ecf5', font:{size:10, weight:'600'}, anchor:'end', align:'top', formatter:(v)=> v }
+      },
       scales:{
         x:{ticks:{autoSkip:false, maxRotation:45, minRotation:30}},
         y:{title:{display:true,text:'₹ Cr'}}
@@ -1200,7 +1247,11 @@ function renderStatusChart(chartId, canvasId, agg, filterKey){
       datasets:[{data: agg.map(a=>a.Count), backgroundColor: PALETTE, borderWidth:2, borderColor:'#121b2e'}]
     },
     options:{
-      responsive:true, maintainAspectRatio:false, plugins:{legend:{position:'bottom'}},
+      responsive:true, maintainAspectRatio:false,
+      plugins:{
+        legend:{position:'bottom'},
+        datalabels:{ display:true, color:'#fff', font:{size:11, weight:'700'}, formatter:(v)=> v }
+      },
       onClick:(evt, elements)=>{ if(elements.length && filterKey) drillFilter(filterKey, labels[elements[0].index]); }
     }
   });
@@ -1273,11 +1324,18 @@ function renderQuarterChart(agg){
     options:{
       responsive:true, maintainAspectRatio:false,
       interaction:{mode:'index', intersect:false},
+      layout:{padding:{top:18}},
       scales:{
         y:{position:'left', grid:{color:'rgba(255,255,255,0.06)'}, title:{display:true,text:'₹ Cr'}},
         y1:{position:'right', grid:{display:false}, title:{display:true,text:'Margin %'}, min:0}
       },
-      plugins:{legend:{position:'bottom', labels:{boxWidth:12}}},
+      plugins:{
+        legend:{position:'bottom', labels:{boxWidth:12}},
+        datalabels:{
+          display:true, clip:true, color:'#e7ecf5', font:{size:10, weight:'600'}, anchor:'end', align:'top',
+          formatter:(v, ctx)=> ctx.dataset.type==='line' ? v.toFixed(1)+'%' : v
+        }
+      },
       onClick:(evt, elements)=>{ if(elements.length) drillFilter('quarter', labels[elements[0].index]); }
     }
   });
@@ -1460,7 +1518,14 @@ function renderComparisonTab(){
         borderRadius:5
       }))
     },
-    options:{responsive:true, maintainAspectRatio:false, plugins:{legend:{position:'bottom'}}}
+    options:{
+      responsive:true, maintainAspectRatio:false,
+      layout:{padding:{top:18}},
+      plugins:{
+        legend:{position:'bottom'},
+        datalabels:{ display:true, clip:true, color:'#e7ecf5', font:{size:9, weight:'600'}, anchor:'end', align:'top', formatter:(v)=> v }
+      }
+    }
   });
 
   // Table: every selected group vs the FIRST selected group (baseline)
@@ -1537,7 +1602,10 @@ function renderNegChart(){
     },
     options:{
       indexAxis:'y', responsive:true, maintainAspectRatio:false,
-      plugins:{legend:{display:false}},
+      plugins:{
+        legend:{display:false},
+        datalabels:{ display:true, clip:true, color:'#e7ecf5', font:{size:9, weight:'600'}, anchor:'end', align:'right', formatter:(v)=> fmtCr(v) }
+      },
       scales:{x:{title:{display:true, text:'Margin (₹)'}}, y:{ticks:{autoSkip:false, font:{size:9}}}}
     }
   });
@@ -1556,7 +1624,13 @@ function renderPosNegChart(){
       labels:['Positive Margin','Negative Margin'],
       datasets:[{data:[pos,neg], backgroundColor:[COLORS.teal, COLORS.coral], borderWidth:2, borderColor:'#121b2e'}]
     },
-    options:{responsive:true, maintainAspectRatio:false, plugins:{legend:{position:'bottom'}}}
+    options:{
+      responsive:true, maintainAspectRatio:false,
+      plugins:{
+        legend:{position:'bottom'},
+        datalabels:{ display:true, color:'#fff', font:{size:11, weight:'700'}, formatter:(v)=> v }
+      }
+    }
   });
 }
 
