@@ -411,18 +411,18 @@ if prepared_df.empty:
     st.warning("Sheet se koi valid row nahi mili. Column headers check karo.")
     st.stop()
 
-# --- TEMP DEBUG: dekho konse actual sheet column resolve ho rahe hai for
-# the 4 Subtotal-tab fields. Remove this block once you've confirmed the
-# correct MANUAL_COLUMN_OVERRIDES letters above and the tab shows data. ---
-with st.expander("🔍 Debug: Subtotal tab column resolution", expanded=False):
-    for field in ["TotalCandidate", "OverallSubtotal", "SubtotalOps", "OpGuardActualCamVoipNode"]:
-        actual_col = resolved_cols.get(field)
-        st.write(f"**{field}** → resolved to sheet column: `{actual_col}`")
-        if actual_col:
-            st.write(prepared_df[actual_col].head(5).tolist())
-        else:
-            st.write("❌ NOT FOUND (name-matching failed - needs a MANUAL_COLUMN_OVERRIDES letter)")
-# --- END DEBUG ---
+# # --- TEMP DEBUG: dekho konse actual sheet column resolve ho rahe hai for
+# # the 4 Subtotal-tab fields. Remove this block once you've confirmed the
+# # correct MANUAL_COLUMN_OVERRIDES letters above and the tab shows data. ---
+# with st.expander("🔍 Debug: Subtotal tab column resolution", expanded=False):
+#     for field in ["TotalCandidate", "OverallSubtotal", "SubtotalOps", "OpGuardActualCamVoipNode"]:
+#         actual_col = resolved_cols.get(field)
+#         st.write(f"**{field}** → resolved to sheet column: `{actual_col}`")
+#         if actual_col:
+#             st.write(prepared_df[actual_col].head(5).tolist())
+#         else:
+#             st.write("❌ NOT FOUND (name-matching failed - needs a MANUAL_COLUMN_OVERRIDES letter)")
+# # --- END DEBUG ---
 
 rows = build_rows(prepared_df, resolved_cols)
 
