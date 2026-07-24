@@ -95,10 +95,11 @@
     width:100%; background:var(--bg); color:var(--text); border:1px solid var(--border);
     border-radius:5px; padding:6px 8px; font-size:12.5px; margin-bottom:6px;
   }
-  .ms-actions{display:flex; gap:8px; margin-bottom:6px;}
+  .ms-actions{display:flex; gap:8px; margin-bottom:6px; flex-wrap:wrap;}
   .ms-actions button{
     flex:1; background:transparent; border:1px solid var(--border); color:var(--muted);
     border-radius:5px; padding:4px 6px; font-size:11px; cursor:pointer; font-family:inherit;
+    min-width:56px;
   }
   .ms-actions button:hover{color:var(--gold); border-color:var(--gold);}
   .ms-list{max-height:170px; overflow-y:auto;}
@@ -122,7 +123,7 @@
   .tabbtn.active{color:var(--gold); border-bottom:2px solid var(--gold);}
   .tabpage{display:none;}
   .tabpage.active{display:block;}
-  .search-row{display:flex; gap:10px; margin-bottom:14px; align-items:center; flex-wrap:wrap;}
+  .search-row{display:flex; gap:10px; margin-bottom:14px; align-items:flex-start; flex-wrap:wrap;}
   .search-row input[type=text]{
     background:var(--panel-2); color:var(--text); border:1px solid var(--border);
     border-radius:6px; padding:7px 10px; font-size:13px; min-width:220px;
@@ -248,7 +249,7 @@
     </div>
     <div class="card">
       <h3>Service-wise Margin % <span class="tag">all services</span></h3>
-      <div class="chart-box"><canvas id="serviceChart"></canvas></div>
+      <div class="chart-box tall"><canvas id="serviceChart"></canvas></div>
     </div>
   </div>
 
@@ -464,7 +465,7 @@
 
   <div class="grid">
     <div class="card">
-      <h3>Negative-Margin Projects <span class="tag">amount, sorted worst first</span></h3>
+      <h3>Negative-Margin Projects <span class="tag">amount, sorted worst first · click a bar to view it below</span></h3>
       <div class="chart-box tall"><canvas id="negChart"></canvas></div>
     </div>
     <div class="card">
@@ -479,17 +480,23 @@
       <input type="text" id="projSearch" placeholder="Search project code, client or service...">
       <label style="font-size:12px;"><input type="checkbox" id="negOnly"> Show negative only</label>
       <label style="font-size:12px;"><input type="checkbox" id="posOnly"> Show positive only</label>
+      <div class="multiselect" style="min-width:190px;">
+        <label>Columns</label>
+        <button type="button" class="ms-btn" id="projColsBtn">Select columns</button>
+        <div class="ms-panel" id="projColsPanel">
+          <input type="text" class="ms-search" id="projColsSearch" placeholder="Search columns...">
+          <div class="ms-actions">
+            <button type="button" id="projColsAll">All</button>
+            <button type="button" id="projColsClear">Clear</button>
+            <button type="button" id="projColsDefault">Default</button>
+          </div>
+          <div class="ms-list" id="projColsList"></div>
+        </div>
+      </div>
     </div>
     <div class="scroll-table">
       <table id="projectTable">
-        <thead><tr>
-          <th>Project Code</th><th>Client</th><th>Client (With SSC)</th><th>Service</th><th>Month</th>
-          <th>Exam Name &amp; Date</th><th>BIO &amp; Fri Dimensioning</th>
-          <th class="num">Centre Count</th><th class="num">Total Candidate</th><th class="num">Max Candidate</th>
-          <th>Op/Guard Actual Count/Cam Count/VOIP/Node</th>
-          <th class="num">Revenue</th><th class="num">Margin</th><th class="num">Margin %</th>
-          <th>Invoice Status</th><th>Status</th>
-        </tr></thead>
+        <thead id="projectTableHead"></thead>
         <tbody></tbody>
       </table>
     </div>
@@ -528,6 +535,11 @@
 // MONTH_ORDER = chronological list of month labels, used to sort month-based charts/filters.
 const ROWS = __ROWS_JSON__;
 const MONTH_ORDER = __MONTH_ORDER_JSON__;
+// ALL_HEADERS = every original Google Sheet column header (row.allColumns keys),
+// used to power the "Columns" picker on the All Projects table.
+// DEFAULT_PROJECT_COLUMNS = the sheet columns that were shown by default before.
+const ALL_HEADERS = __ALL_HEADERS_JSON__;
+const DEFAULT_PROJECT_COLUMNS = __DEFAULT_COLUMNS_JSON__;
 
 // fmtCr: formats a raw rupee number for display, auto-picking the right unit -
 // "₹X.XX Cr" at 1 Cr (1e7) or more, "₹X.XX L" (Lakh) from 1 Lakh (1e5) up to 1 Cr,
@@ -958,12 +970,16 @@ function renderClient(){
 }
 
 // renderService: bar chart of Margin % by service (red bars for negative margin).
+// Labels are truncated (full name still shown in the tooltip) and the tick
+// font/rotation is tuned so long service names don't overlap / spill outside
+// the chart box.
 function renderService(){
   destroy('service');
   const ctx = document.getElementById('serviceChart');
   const rows = getFilteredRows();
   const agg = [...aggregateBy(rows, 'service')].sort((a,b)=>b.MarginPct-a.MarginPct);
-  const labels = agg.map(s=>s.key);
+  const rawKeys = agg.map(s=>s.key);
+  const labels = rawKeys.map(k => k.length>18 ? k.slice(0,16)+'…' : k);
   charts.service = new Chart(ctx, {
     type:'bar',
     data:{
@@ -972,13 +988,17 @@ function renderService(){
     },
     options:{
       responsive:true, maintainAspectRatio:false,
-      layout:{padding:{top:18}},
+      layout:{padding:{top:18, bottom:4}},
       plugins:{
         legend:{display:false},
+        tooltip:{callbacks:{title:(items)=> items.length ? rawKeys[items[0].dataIndex] : ''}},
         datalabels:{ display:true, clip:true, color:'#e7ecf5', font:{size:10, weight:'600'}, anchor:'end', align:'top', formatter:(v)=> v.toFixed(1)+'%' }
       },
-      scales:{x:{ticks:{autoSkip:false, maxRotation:45, minRotation:30}}, y:{title:{display:true,text:'%'}}},
-      onClick:(evt, elements)=>{ if(elements.length) drillFilter('service', labels[elements[0].index]); }
+      scales:{
+        x:{ticks:{autoSkip:false, maxRotation:60, minRotation:45, font:{size:10}}},
+        y:{title:{display:true,text:'%'}}
+      },
+      onClick:(evt, elements)=>{ if(elements.length) drillFilter('service', rawKeys[elements[0].index]); }
     }
   });
 }
@@ -1678,6 +1698,107 @@ let projSearchTerm = '';
 let projNegOnly = false;
 let projPosOnly = false;
 
+// colLabel: human-readable label for a column key used by the "All Projects"
+// column picker. All real sheet headers are shown as-is; the one synthetic
+// (computed, not present in the sheet) column gets a friendly label.
+function colLabel(c){
+  return c === '_marginStatus' ? 'Margin Status' : c;
+}
+
+// PROJECT_COLUMN_OPTIONS: every column the "Columns" picker can show -
+// every original Google Sheet header (ALL_HEADERS) plus one computed
+// pseudo-column ("_marginStatus") that renders the Positive/Negative badge.
+const PROJECT_COLUMN_OPTIONS = [...ALL_HEADERS, '_marginStatus'];
+
+// projSelectedColumns: columns currently shown in the All Projects table.
+// Starts out matching the dashboard's previous fixed column set (plus the
+// margin-status badge), but the user can pick any subset of every sheet header.
+let projSelectedColumns = new Set([
+  ...(DEFAULT_PROJECT_COLUMNS && DEFAULT_PROJECT_COLUMNS.length ? DEFAULT_PROJECT_COLUMNS : ALL_HEADERS),
+  '_marginStatus'
+]);
+
+// colValue: reads the display value for one column of one project row.
+// Real sheet columns come from row.allColumns (the full, unfiltered set of
+// columns from the Google Sheet); the pseudo margin-status column renders
+// a colored badge from the already-computed p.margin field.
+function colValue(p, col){
+  if (col === '_marginStatus'){
+    return (p.margin||0) < 0 ? '<span class="badge neg">Negative</span>' : '<span class="badge pos">Positive</span>';
+  }
+  const v = (p.allColumns && p.allColumns[col] !== undefined) ? p.allColumns[col] : '';
+  return (v === null || v === undefined) ? '' : String(v);
+}
+
+// buildProjColsPanel: fills the "Columns" picker for the All Projects table
+// with one checkbox per available sheet column (+ the margin-status pseudo-column).
+function buildProjColsPanel(){
+  const listEl = document.getElementById('projColsList');
+  listEl.innerHTML = '';
+  PROJECT_COLUMN_OPTIONS.forEach(c=>{
+    const row = document.createElement('label');
+    row.className = 'ms-option';
+    const cb = document.createElement('input');
+    cb.type = 'checkbox';
+    cb.value = c;
+    cb.checked = projSelectedColumns.has(c);
+    const span = document.createElement('span');
+    span.textContent = colLabel(c);
+    row.appendChild(cb); row.appendChild(span);
+    listEl.appendChild(row);
+  });
+  updateProjColsBtn();
+}
+
+function updateProjColsBtn(){
+  const btn = document.getElementById('projColsBtn');
+  const n = projSelectedColumns.size;
+  btn.textContent = n === 0 ? 'Select columns' : n + ' columns selected';
+  btn.classList.toggle('active', n>0);
+}
+
+document.getElementById('projColsBtn').addEventListener('click', (e)=>{
+  e.stopPropagation();
+  document.querySelectorAll('.ms-panel.open').forEach(p=>{ if(p.id!=='projColsPanel') p.classList.remove('open'); });
+  document.getElementById('projColsPanel').classList.toggle('open');
+});
+document.getElementById('projColsPanel').addEventListener('click', e=>e.stopPropagation());
+document.getElementById('projColsSearch').addEventListener('input', e=>{
+  const term = e.target.value.toLowerCase();
+  document.querySelectorAll('#projColsList .ms-option').forEach(opt=>{
+    opt.style.display = opt.textContent.toLowerCase().includes(term) ? '' : 'none';
+  });
+});
+document.getElementById('projColsAll').addEventListener('click', ()=>{
+  document.querySelectorAll('#projColsList .ms-option').forEach(opt=>{
+    if (opt.style.display !== 'none') opt.querySelector('input').checked = true;
+  });
+  projSelectedColumns = new Set(Array.from(document.querySelectorAll('#projColsList input:checked')).map(c=>c.value));
+  updateProjColsBtn();
+  renderProjectTable();
+});
+document.getElementById('projColsClear').addEventListener('click', ()=>{
+  document.querySelectorAll('#projColsList input').forEach(c=>c.checked=false);
+  projSelectedColumns = new Set();
+  updateProjColsBtn();
+  renderProjectTable();
+});
+document.getElementById('projColsDefault').addEventListener('click', ()=>{
+  const defaults = new Set([
+    ...(DEFAULT_PROJECT_COLUMNS && DEFAULT_PROJECT_COLUMNS.length ? DEFAULT_PROJECT_COLUMNS : ALL_HEADERS),
+    '_marginStatus'
+  ]);
+  document.querySelectorAll('#projColsList input').forEach(c=>{ c.checked = defaults.has(c.value); });
+  projSelectedColumns = defaults;
+  updateProjColsBtn();
+  renderProjectTable();
+});
+document.getElementById('projColsList').addEventListener('change', ()=>{
+  projSelectedColumns = new Set(Array.from(document.querySelectorAll('#projColsList input:checked')).map(c=>c.value));
+  updateProjColsBtn();
+  renderProjectTable();
+});
+
 // renderProjKPIs: KPI cards on the Project-wise tab (neg/pos project counts, total negative margin).
 function renderProjKPIs(){
   const rows = getFilteredRows();
@@ -1700,6 +1821,8 @@ function renderProjKPIs(){
 }
 
 // renderNegChart: horizontal bar chart of the worst 40 negative-margin projects.
+// Clicking a bar filters the "All Projects" table below down to that exact
+// project (via the search box) and scrolls it into view.
 function renderNegChart(){
   destroy('neg');
   const ctx = document.getElementById('negChart');
@@ -1717,7 +1840,21 @@ function renderNegChart(){
         legend:{display:false},
         datalabels:{ display:true, clip:true, color:'#e7ecf5', font:{size:9, weight:'600'}, anchor:'end', align:'right', formatter:(v)=> fmtCr(v) }
       },
-      scales:{x:{title:{display:true, text:'Margin (₹)'}}, y:{ticks:{autoSkip:false, font:{size:9}}}}
+      scales:{x:{title:{display:true, text:'Margin (₹)'}}, y:{ticks:{autoSkip:false, font:{size:9}}}},
+      onClick:(evt, elements)=>{
+        if(!elements.length) return;
+        const code = neg[elements[0].index].projectCode;
+        projSearchTerm = code;
+        projNegOnly = false;
+        projPosOnly = false;
+        const searchInput = document.getElementById('projSearch');
+        if (searchInput) searchInput.value = code;
+        const negCb = document.getElementById('negOnly'); if (negCb) negCb.checked = false;
+        const posCb = document.getElementById('posOnly'); if (posCb) posCb.checked = false;
+        renderProjectTable();
+        const tableEl = document.getElementById('projectTable');
+        if (tableEl) tableEl.scrollIntoView({behavior:'smooth', block:'start'});
+      }
     }
   });
 }
@@ -1745,10 +1882,23 @@ function renderPosNegChart(){
   });
 }
 
+// renderProjectTableHead: draws the "All Projects" table header based on
+// whichever columns are currently ticked in the Columns picker, in a fixed
+// order (every sheet header, then the margin-status pseudo-column).
+// Returns the resolved column list so renderProjectTable can reuse it for the body.
+function renderProjectTableHead(){
+  const thead = document.getElementById('projectTableHead');
+  const cols = PROJECT_COLUMN_OPTIONS.filter(c => projSelectedColumns.has(c));
+  thead.innerHTML = '<tr>' + cols.map(c => `<th>${colLabel(c)}</th>`).join('') + '</tr>';
+  return cols;
+}
+
 // renderProjectTable: fills the "All Projects" table, applying the free-text
 // search box and the "negative only" / "positive only" checkboxes on top of
-// the global filters.
+// the global filters, and rendering only the columns currently selected in
+// the Columns picker (built from every original Google Sheet header).
 function renderProjectTable(){
+  const cols = renderProjectTableHead();
   const tbody = document.querySelector('#projectTable tbody');
   tbody.innerHTML = '';
   const term = projSearchTerm.trim().toLowerCase();
@@ -1757,18 +1907,16 @@ function renderProjectTable(){
     if(projNegOnly && (p.margin||0)>=0) return false;
     if(projPosOnly && (p.margin||0)<=0) return false;
     if(!term) return true;
-    return searchFields.some(field => String(p[field] ?? '').toLowerCase().includes(term));
+    if (searchFields.some(field => String(p[field] ?? '').toLowerCase().includes(term))) return true;
+    if (p.allColumns) {
+      return Object.values(p.allColumns).some(v => String(v ?? '').toLowerCase().includes(term));
+    }
+    return false;
   });
   rows.forEach(p=>{
     const tr = document.createElement('tr');
     tr.className = (p.margin||0) < 0 ? 'row-neg' : 'row-pos';
-    const badge = (p.margin||0) < 0 ? '<span class="badge neg">Negative</span>' : '<span class="badge pos">Positive</span>';
-    tr.innerHTML = `<td>${p.projectCode}</td><td>${p.client}</td><td>${p.clientSSC||''}</td><td>${p.service}</td><td>${p.month}</td>` +
-      `<td>${p.examNameDate||''}</td><td>${p.bioFriDimensioning||''}</td>` +
-      `<td class="num">${fmtNum(Math.round(p.centreCount||0))}</td><td class="num">${fmtNum(Math.round(p.totalCandidate||0))}</td><td class="num">${fmtNum(Math.round(p.maxCandidate||0))}</td>` +
-      `<td>${p.opGuardData||''}</td>` +
-      `<td class="num">${fmtNum(Math.round(p.revenue||0))}</td><td class="num">${fmtNum(Math.round(p.margin||0))}</td><td class="num">${(p.marginPct||0).toFixed(1)}%</td>` +
-      `<td>${p.invoiceStatus||''}</td><td>${badge}</td>`;
+    tr.innerHTML = cols.map(c => `<td>${colValue(p,c)}</td>`).join('');
     tbody.appendChild(tr);
   });
   document.getElementById('projTableTag').textContent = rows.length + ' of ' + ROWS.length + ' projects';
@@ -1905,6 +2053,7 @@ document.querySelectorAll('input[name="subtotalView"]').forEach(radio=>{
 
 // ---- initial page load ----
 buildFilterBar();
+buildProjColsPanel();
 document.getElementById('periodLabel').textContent = '__PERIOD_LABEL__';
 renderAll();
 </script>
