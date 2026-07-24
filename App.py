@@ -362,6 +362,15 @@ def build_rows(df: pd.DataFrame, cols: dict):
     per_camera_opguard_subtotal_overall = (overall_subtotal / safe_centre_count).fillna(0)
     per_camera_opguard_subtotal_ops = (subtotal_ops / safe_centre_count).fillna(0)
 
+    # --- Full set of ALL sheet columns, as-is, attached to every row.
+    # This powers the "Columns" picker on the All Projects table so the
+    # person can show/hide literally any header that exists in the Google
+    # Sheet, not just the fixed subset the table used to hardcode.
+    # NaN -> "" so it survives JSON serialization cleanly.
+    all_cols_df = df.drop(columns=["_ProjectCode", "_Quarter"], errors="ignore")
+    all_cols_df = all_cols_df.where(all_cols_df.notna(), "")
+    all_columns_records = all_cols_df.to_dict("records")
+
     out = pd.DataFrame({
         "projectCode": df["_ProjectCode"],
         "client": _series_or_blank(df, cols, "Client", n),
@@ -394,6 +403,9 @@ def build_rows(df: pd.DataFrame, cols: dict):
         "perCameraOpGuardSubtotalOverall": per_camera_opguard_subtotal_overall,
         "perCameraOpGuardSubtotalOps": per_camera_opguard_subtotal_ops,
     })
+    # full raw sheet columns, aligned by the same (filtered) row index -
+    # powers the dynamic "Columns" picker on the All Projects table.
+    out["allColumns"] = pd.Series(all_columns_records, index=df.index)
     return out.to_dict("records")
 
 
@@ -432,12 +444,29 @@ months_present = sorted(
 )
 period_label = f"{months_present[0]} – {months_present[-1]}" if months_present else ""
 
+# --- Full list of every Google Sheet header (excluding our internal helper
+# columns), plus the "sensible defaults" the All Projects table used to show
+# out of the box - both feed the new column-picker dropdown in the template.
+all_headers_list = [c for c in prepared_df.columns if not str(c).startswith("_")]
+
+_default_logical_order = [
+    "ProjectCode", "Client", "ClientSSC", "Service", "Month", "ExamNameDate",
+    "BioFriDimensioning", "CentreCount", "TotalCandidate", "MaxCandidate",
+    "OpGuardActualCamVoipNode", "Revenue", "Margin", "MarginPct",
+    "InvoiceStatus", "ProjectStatus",
+]
+default_display_columns = [
+    resolved_cols.get(k) for k in _default_logical_order if resolved_cols.get(k)
+]
+
 template_html = TEMPLATE_PATH.read_text(encoding="utf-8")
 final_html = (
     template_html
     .replace("__ROWS_JSON__", json.dumps(rows, default=str))
     .replace("__MONTH_ORDER_JSON__", json.dumps(months_present, default=str))
     .replace("__PERIOD_LABEL__", period_label)
+    .replace("__ALL_HEADERS_JSON__", json.dumps(all_headers_list, default=str))
+    .replace("__DEFAULT_COLUMNS_JSON__", json.dumps(default_display_columns, default=str))
 )
 
 components.html(final_html, height=3200, scrolling=True)
