@@ -81,33 +81,23 @@ def clean_numeric(series: pd.Series) -> pd.Series:
 # that CSV is loaded, pandas silently renames the second occurrence to
 # "Service.1" / "Month.1" - so plain name-matching below can only ever find
 # the FIRST occurrence, even when the second one is the one you actually want.
-# That was causing three real bugs, now fixed via position (column-letter)
-# overrides, verified against Final_Margin_Report_-_Final_Data.csv:
 #
-#   - "Month"   -> was resolving to the col with "Apr_2026" style values.
-#                  month_sort_key() only understands "Apr_26" (%b_%y), so
-#                  EVERY month failed to parse and the Monthly Trend /
-#                  Overview trend charts sorted incorrectly. Fixed to point
-#                  at column AT, which holds the "Apr_26" short form.
-#   - "Service" -> was resolving to the raw code-style value (e.g.
-#                  "LIVECCTV") instead of the human-readable one
-#                  (e.g. "LIVE CCTV") used everywhere else (Client, Exam
-#                  Name, Project Code columns). ~17% of rows had a
-#                  mismatched/ugly Service label. Fixed to point at column
-#                  AQ, the human-readable duplicate.
-#   - "OpGuardActualCamVoipNode" -> the override here used to say column
-#                  "U", which is actually "sum Local Purchase", not the
-#                  Op/Guard/Cam/VOIP field at all. Fixed to column BE,
-#                  the real "Op/Guard Actual Count/Cam Count/VOIP" column.
-#   - "ProjectCode" -> the sheet's real "Project Code" column was never
-#                  being matched by name (target text didn't line up), so
-#                  every row was silently getting a FAKE synthetic code
-#                  (Client+Exam+Service concatenated) instead of the real
-#                  one. Fixed to point at column AU, the actual Project Code.
+# Fixed so far (verified against Final_Margin_Report_-_Final_Data.csv):
+#   - "Month"   -> column AT ("Apr_26" short form)
+#   - "Service" -> column AQ (human-readable duplicate)
+#   - "OpGuardActualCamVoipNode" -> column BE
+#   - "ProjectCode" -> column AU
+#
+# STILL SUSPECT (Subtotal tab showing blank/zero data - likely the SAME
+# duplicate-header bug): "TotalCandidate", "OverallSubtotal", "SubtotalOps".
+# Run the app, open the "🔍 Debug: Column Resolution" expander right below
+# the KPI area, check which sheet column each one resolved to and whether
+# the sample values look right. Then fill in the correct column LETTER
+# below (open the sheet, look at the column letter above the header) and
+# remove/ignore the debug block once confirmed.
 #
 # IMPORTANT: these are POSITION-based. If columns get added/removed/reordered
-# in the sheet later, re-check the letter for each field (open the sheet,
-# look at the column letter above the header) and update below.
+# in the sheet later, re-check the letter for each field and update below.
 #
 # Leave a value as "" to fall back to automatic name-based matching instead.
 MANUAL_COLUMN_OVERRIDES = {
@@ -115,6 +105,9 @@ MANUAL_COLUMN_OVERRIDES = {
     "Service": "AQ",
     "OpGuardActualCamVoipNode": "BE",
     "ProjectCode": "AU",
+    # "TotalCandidate": "",     # <-- fill in after checking debug output
+    # "OverallSubtotal": "",    # <-- fill in after checking debug output
+    # "SubtotalOps": "",        # <-- fill in after checking debug output
 }
 
 
@@ -354,6 +347,22 @@ def build_rows(df: pd.DataFrame, cols: dict):
     overall_subtotal = df[cols["OverallSubtotal"]] if cols.get("OverallSubtotal") else pd.Series([0.0] * n, index=df.index)
     subtotal_ops = df[cols["SubtotalOps"]] if cols.get("SubtotalOps") else pd.Series([0.0] * n, index=df.index)
 
+    # --- Per Candidate / Per Camera-OP-Guard subtotal rate fields, used by
+    # the Subtotal Details tab KPIs + table (previously referenced in the
+    # HTML/JS as p.perCandidateSubtotalOverall etc. but NEVER computed here
+    # -> that's why those columns showed blank/0 even when Overall Subtotal /
+    # Subtotal (Ops) / Total Candidate resolve fine). Guard against
+    # divide-by-zero with .replace(0, pd.NA).
+    safe_total_candidate = total_candidate.replace(0, pd.NA)
+    per_candidate_subtotal_overall = (overall_subtotal / safe_total_candidate).fillna(0)
+    per_candidate_subtotal_ops = (subtotal_ops / safe_total_candidate).fillna(0)
+
+    # "Per Camera/OP/Guard" denominator: centre_count is used as the closest
+    # numeric proxy since opGuardData is a combined text field, not a count.
+    safe_centre_count = centre_count.replace(0, pd.NA)
+    per_camera_opguard_subtotal_overall = (overall_subtotal / safe_centre_count).fillna(0)
+    per_camera_opguard_subtotal_ops = (subtotal_ops / safe_centre_count).fillna(0)
+
     out = pd.DataFrame({
         "projectCode": df["_ProjectCode"],
         "client": _series_or_blank(df, cols, "Client", n),
@@ -381,6 +390,10 @@ def build_rows(df: pd.DataFrame, cols: dict):
         # fields for the "Subtotal Details" tab
         "overallSubtotal": overall_subtotal.fillna(0),
         "subtotalOps": subtotal_ops.fillna(0),
+        "perCandidateSubtotalOverall": per_candidate_subtotal_overall,
+        "perCandidateSubtotalOps": per_candidate_subtotal_ops,
+        "perCameraOpGuardSubtotalOverall": per_camera_opguard_subtotal_overall,
+        "perCameraOpGuardSubtotalOps": per_camera_opguard_subtotal_ops,
     })
     return out.to_dict("records")
 
@@ -398,6 +411,19 @@ except Exception as e:
 if prepared_df.empty:
     st.warning("Sheet se koi valid row nahi mili. Column headers check karo.")
     st.stop()
+
+# --- TEMP DEBUG: dekho konse actual sheet column resolve ho rahe hai for
+# the 4 Subtotal-tab fields. Remove this block once you've confirmed the
+# correct MANUAL_COLUMN_OVERRIDES letters above and the tab shows data. ---
+with st.expander("🔍 Debug: Subtotal tab column resolution", expanded=True):
+    for field in ["TotalCandidate", "OverallSubtotal", "SubtotalOps", "OpGuardActualCamVoipNode"]:
+        actual_col = resolved_cols.get(field)
+        st.write(f"**{field}** → resolved to sheet column: `{actual_col}`")
+        if actual_col:
+            st.write(prepared_df[actual_col].head(5).tolist())
+        else:
+            st.write("❌ NOT FOUND (name-matching failed - needs a MANUAL_COLUMN_OVERRIDES letter)")
+# --- END DEBUG ---
 
 rows = build_rows(prepared_df, resolved_cols)
 
