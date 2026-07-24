@@ -500,7 +500,7 @@
   <div id="tab-subtotal" class="tabpage">
 
   <div class="card">
-    <h3>Subtotal Details <span class="tag">Total Candidate · Op/Guard Actual Count/Cam Count/VOIP · Overall Subtotal · Subtotal (Ops)</span></h3>
+    <h3>Subtotal Details <span class="tag">Total Candidate · Op/Guard Actual Count/Cam Count/VOIP · Overall Subtotal · Subtotal (Ops) · Per Candidate &amp; Per Camera/OP/Guard Subtotals</span></h3>
     <div class="search-row view-toggle">
       <label><input type="radio" name="subtotalView" id="subtotalViewProject" value="project" checked> Project-wise</label>
       <label><input type="radio" name="subtotalView" id="subtotalViewClient" value="client"> Client-wise</label>
@@ -1798,20 +1798,30 @@ document.getElementById('posOnly').addEventListener('change', e=>{
 });
 
 // ---------------- Subtotal Details tab (Total Candidate, Op/Guard Actual
-// Count/Cam Count/VOIP, Overall Subtotal, Subtotal (Ops)) ----------------
+// Count/Cam Count/VOIP, Overall Subtotal, Subtotal (Ops), Per Candidate
+// Subtotal Overall/Ops, Per Camera/OP/Guard Subtotal Overall/Ops) ----------------
 let subtotalView = 'project';
 
 function renderSubtotalKPIs(rows){
   const row = document.getElementById('subtotalKpiRow');
   row.innerHTML = '';
+  const n = rows.length || 1;
   const totalCandidate = rows.reduce((a,b)=>a+(b.totalCandidate||0),0);
   const totalOverallSubtotal = rows.reduce((a,b)=>a+(b.overallSubtotal||0),0);
   const totalSubtotalOps = rows.reduce((a,b)=>a+(b.subtotalOps||0),0);
+  const avgPerCandidateOverall = rows.reduce((a,b)=>a+(b.perCandidateSubtotalOverall||0),0)/n;
+  const avgPerCandidateOps = rows.reduce((a,b)=>a+(b.perCandidateSubtotalOps||0),0)/n;
+  const avgPerCameraOverall = rows.reduce((a,b)=>a+(b.perCameraOpGuardSubtotalOverall||0),0)/n;
+  const avgPerCameraOps = rows.reduce((a,b)=>a+(b.perCameraOpGuardSubtotalOps||0),0)/n;
   const items = [
     {label:'Total Candidate', value: fmtNum(Math.round(totalCandidate))},
     {label:'Overall Subtotal', value: fmtCr(totalOverallSubtotal)},
     {label:'Subtotal (Ops)', value: fmtCr(totalSubtotalOps)},
     {label:'Rows in View', value: fmtNum(rows.length)},
+    {label:'Avg Per Candidate Subtotal (Overall)', value: fmtCr(avgPerCandidateOverall)},
+    {label:'Avg Per Candidate Subtotal (Ops)', value: fmtCr(avgPerCandidateOps)},
+    {label:'Avg Per Camera/OP/Guard Subtotal (Overall)', value: fmtCr(avgPerCameraOverall)},
+    {label:'Avg Per Camera/OP/Guard Subtotal (Ops)', value: fmtCr(avgPerCameraOps)},
   ];
   items.forEach(it=>{
     const div = document.createElement('div'); div.className='kpi';
@@ -1821,40 +1831,56 @@ function renderSubtotalKPIs(rows){
 }
 
 // renderSubtotalTable: shows Total Candidate / Op-Guard-Cam-VOIP / Overall
-// Subtotal / Subtotal (Ops), either one row per project ("Project-wise") or
-// aggregated per client ("Client-wise" - numeric fields summed; the
-// Op/Guard field is a combined text cell per project so it's shown as an
-// entry count rather than summed).
+// Subtotal / Subtotal (Ops) / Per Candidate Subtotal (Overall & Ops) / Per
+// Camera-OP-Guard Subtotal (Overall & Ops), either one row per project
+// ("Project-wise") or aggregated per client ("Client-wise" - Total
+// Candidate/Overall Subtotal/Subtotal (Ops) are summed across the client's
+// projects; the 4 "per unit" columns are rate metrics so they're averaged
+// across the client's projects instead of summed; the Op/Guard field is a
+// combined text cell per project so it's shown as an entry count).
 function renderSubtotalTable(rows){
   const thead = document.getElementById('subtotalTableHead');
   const tbody = document.querySelector('#subtotalTable tbody');
   tbody.innerHTML = '';
 
   if (subtotalView === 'project'){
-    thead.innerHTML = `<tr><th>Project Code</th><th>Client</th><th class="num">Total Candidate</th><th>Op/Guard Actual Count/Cam Count/VOIP</th><th class="num">Overall Subtotal</th><th class="num">Subtotal (Ops)</th></tr>`;
+    thead.innerHTML = `<tr><th>Project Code</th><th>Client</th><th class="num">Total Candidate</th><th>Op/Guard Actual Count/Cam Count/VOIP</th><th class="num">Overall Subtotal</th><th class="num">Subtotal (Ops)</th><th class="num">Per Candidate Subtotal OverlAll</th><th class="num">Per Candidate Subtotal Ops</th><th class="num">Per Camera/OP/Gaurd Subtotal OverlAll</th><th class="num">Per Camera/OP/Gaurd Subtotal Ops</th></tr>`;
     rows.forEach(p=>{
       const tr = document.createElement('tr');
-      tr.innerHTML = `<td>${p.projectCode}</td><td>${p.client}</td><td class="num">${fmtNum(Math.round(p.totalCandidate||0))}</td><td>${p.opGuardData||''}</td><td class="num">${fmtNum(Math.round(p.overallSubtotal||0))}</td><td class="num">${fmtNum(Math.round(p.subtotalOps||0))}</td>`;
+      tr.innerHTML = `<td>${p.projectCode}</td><td>${p.client}</td><td class="num">${fmtNum(Math.round(p.totalCandidate||0))}</td><td>${p.opGuardData||''}</td><td class="num">${fmtNum(Math.round(p.overallSubtotal||0))}</td><td class="num">${fmtNum(Math.round(p.subtotalOps||0))}</td><td class="num">${fmtNum(Math.round(p.perCandidateSubtotalOverall||0))}</td><td class="num">${fmtNum(Math.round(p.perCandidateSubtotalOps||0))}</td><td class="num">${fmtNum(Math.round(p.perCameraOpGuardSubtotalOverall||0))}</td><td class="num">${fmtNum(Math.round(p.perCameraOpGuardSubtotalOps||0))}</td>`;
       tbody.appendChild(tr);
     });
     document.getElementById('subtotalTableTag').textContent = rows.length + ' projects';
   } else {
-    thead.innerHTML = `<tr><th>Client</th><th class="num">Total Candidate</th><th>Op/Guard Actual Count/Cam Count/VOIP</th><th class="num">Overall Subtotal</th><th class="num">Subtotal (Ops)</th><th class="num">Projects</th></tr>`;
+    thead.innerHTML = `<tr><th>Client</th><th class="num">Total Candidate</th><th>Op/Guard Actual Count/Cam Count/VOIP</th><th class="num">Overall Subtotal</th><th class="num">Subtotal (Ops)</th><th class="num">Avg Per Candidate Subtotal OverlAll</th><th class="num">Avg Per Candidate Subtotal Ops</th><th class="num">Avg Per Camera/OP/Gaurd Subtotal OverlAll</th><th class="num">Avg Per Camera/OP/Gaurd Subtotal Ops</th><th class="num">Projects</th></tr>`;
     const map = new Map();
     rows.forEach(r=>{
       const key = r.client || '(blank)';
-      if (!map.has(key)) map.set(key, {TotalCandidate:0, OverallSubtotal:0, SubtotalOps:0, Projects:0, opGuardCount:0});
+      if (!map.has(key)) map.set(key, {
+        TotalCandidate:0, OverallSubtotal:0, SubtotalOps:0, Projects:0, opGuardCount:0,
+        PerCandidateOverallSum:0, PerCandidateOpsSum:0, PerCameraOverallSum:0, PerCameraOpsSum:0,
+      });
       const g = map.get(key);
       g.TotalCandidate += (r.totalCandidate||0);
       g.OverallSubtotal += (r.overallSubtotal||0);
       g.SubtotalOps += (r.subtotalOps||0);
       g.Projects += 1;
       if (r.opGuardData) g.opGuardCount += 1;
+      g.PerCandidateOverallSum += (r.perCandidateSubtotalOverall||0);
+      g.PerCandidateOpsSum += (r.perCandidateSubtotalOps||0);
+      g.PerCameraOverallSum += (r.perCameraOpGuardSubtotalOverall||0);
+      g.PerCameraOpsSum += (r.perCameraOpGuardSubtotalOps||0);
     });
-    const agg = Array.from(map.entries()).map(([key,g])=>({key, ...g})).sort((a,b)=>b.OverallSubtotal-a.OverallSubtotal);
+    const agg = Array.from(map.entries()).map(([key,g])=>({
+      key, ...g,
+      AvgPerCandidateOverall: g.Projects ? g.PerCandidateOverallSum/g.Projects : 0,
+      AvgPerCandidateOps: g.Projects ? g.PerCandidateOpsSum/g.Projects : 0,
+      AvgPerCameraOverall: g.Projects ? g.PerCameraOverallSum/g.Projects : 0,
+      AvgPerCameraOps: g.Projects ? g.PerCameraOpsSum/g.Projects : 0,
+    })).sort((a,b)=>b.OverallSubtotal-a.OverallSubtotal);
     agg.forEach(c=>{
       const tr = document.createElement('tr');
-      tr.innerHTML = `<td>${c.key}</td><td class="num">${fmtNum(Math.round(c.TotalCandidate))}</td><td>${c.opGuardCount} entries</td><td class="num">${fmtNum(Math.round(c.OverallSubtotal))}</td><td class="num">${fmtNum(Math.round(c.SubtotalOps))}</td><td class="num">${fmtNum(c.Projects)}</td>`;
+      tr.innerHTML = `<td>${c.key}</td><td class="num">${fmtNum(Math.round(c.TotalCandidate))}</td><td>${c.opGuardCount} entries</td><td class="num">${fmtNum(Math.round(c.OverallSubtotal))}</td><td class="num">${fmtNum(Math.round(c.SubtotalOps))}</td><td class="num">${fmtNum(Math.round(c.AvgPerCandidateOverall))}</td><td class="num">${fmtNum(Math.round(c.AvgPerCandidateOps))}</td><td class="num">${fmtNum(Math.round(c.AvgPerCameraOverall))}</td><td class="num">${fmtNum(Math.round(c.AvgPerCameraOps))}</td><td class="num">${fmtNum(c.Projects)}</td>`;
       tbody.appendChild(tr);
     });
     document.getElementById('subtotalTableTag').textContent = agg.length + ' clients';
