@@ -996,8 +996,8 @@ function renderService(){
         datalabels:{ display:true, clip:true, color:'#e7ecf5', font:{size:10, weight:'600'}, anchor:'end', align:'top', formatter:(v)=> v.toFixed(1)+'%' }
       },
       scales:{
-        x:{ticks:{autoSkip:false, maxRotation:40, minRotation:45, font:{size:10}}},
-        y:{title:{display:true,text:'%'}}
+        x:{ticks:{autoSkip:false, maxRotation:60, minRotation:45, font:{size:10}}},
+        y:{ min: -40, max: 120,title:{display:true,text:'%'}}
       },
       onClick:(evt, elements)=>{ if(elements.length) drillFilter('service', rawKeys[elements[0].index]); }
     }
