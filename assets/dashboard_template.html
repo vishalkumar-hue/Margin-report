@@ -1814,15 +1814,16 @@ function renderSubtotalKPIs(rows){
   const avgPerCameraOverall = rows.reduce((a,b)=>a+(b.perCameraOpGuardSubtotalOverall||0),0)/n;
   const avgPerCameraOps = rows.reduce((a,b)=>a+(b.perCameraOpGuardSubtotalOps||0),0)/n;
   const items = [
-    {label:'Total Candidate', value: fmtNum(Math.round(totalCandidate))},
-    {label:'Overall Subtotal', value: fmtCr(totalOverallSubtotal)},
-    {label:'Subtotal (Ops)', value: fmtCr(totalSubtotalOps)},
-    {label:'Rows in View', value: fmtNum(rows.length)},
-    {label:'Avg Per Candidate Subtotal (Overall)', value: fmtCr(avgPerCandidateOverall)},
-    {label:'Avg Per Candidate Subtotal (Ops)', value: fmtCr(avgPerCandidateOps)},
-    {label:'Avg Per Camera/OP/Guard Subtotal (Overall)', value: fmtCr(avgPerCameraOverall)},
-    {label:'Avg Per Camera/OP/Guard Subtotal (Ops)', value: fmtCr(avgPerCameraOps)},
-  ];
+    { label: 'Total Candidate', value: fmtNum(Math.round(totalCandidate)) },
+  { label: 'Overall Subtotal', value: fmtCr(totalOverallSubtotal) },
+  { label: 'Subtotal (Ops)', value: fmtCr(totalSubtotalOps) },
+  { label: 'Rows in View', value: fmtNum(rows.length) },
+
+  { label: 'Avg Per Candidate (Overall)', value: fmtNum(Math.round(avgPerCandidateOverall)) },
+  { label: 'Avg Per Candidate (Ops)', value: fmtNum(Math.round(avgPerCandidateOps)) },
+  { label: 'Avg Per Camera/OP/Guard (Overall)', value: fmtNum(Math.round(avgPerCameraOverall)) },
+  { label: 'Avg Per Camera/OP/Guard (Ops)', value: fmtNum(Math.round(avgPerCameraOps)) },
+];
   items.forEach(it=>{
     const div = document.createElement('div'); div.className='kpi';
     div.innerHTML = `<div class="label">${it.label}</div><div class="value">${it.value}</div>`;
