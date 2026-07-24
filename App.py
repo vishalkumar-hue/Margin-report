@@ -4,7 +4,7 @@ Fetches live data from a public Google Sheet, cleans it, and sends
 row-level data to the ORIGINAL Chart.js HTML/CSS dashboard, which now
 does all filtering + aggregation client-side across ALL tabs
 (Overview, Monthly Trend, Client Analysis, Service Analysis, Status Overview,
-Comparison, Quarter Comparison, Project-wise).
+Comparison, Quarter Comparison, Project-wise, Subtotal Details).
 """
 
 import json
@@ -196,6 +196,9 @@ COLUMN_TARGETS = {
         "Op/Guard Actual Count/Cam Count/VOIP/Node ",
         "Op/Guard Actual Count/Cam Count/VOIP",
     ],
+    # --- newly added columns for the "Subtotal Details" tab ---
+    "OverallSubtotal": ["Overall Subtotal", "Subtotal Overall", "Subtotal"],
+    "SubtotalOps": ["Subtotal (Ops)", "Subtotal(Ops)", "Subtotal Ops", "Subtotal - Ops"],
 }
 
 
@@ -229,11 +232,13 @@ def resolve_columns(df: pd.DataFrame):
 
 # Numeric fields get comma/₹/% stripped and converted to float.
 # CentreCount / TotalCandidate / MaxCandidate are plain counts, so they go here too.
+# OverallSubtotal / SubtotalOps are rupee amounts, also numeric.
 # OpGuardActualCamVoipNode is left out - it's a combined text field (Op/Guard/Cam/VOIP/Node
 # all in one cell), so it stays as text.
 NUMERIC_FIELDS = {
     "Revenue", "Margin", "MarginPct", "MarginPctOps",
     "CentreCount", "TotalCandidate", "MaxCandidate",
+    "OverallSubtotal", "SubtotalOps",
 }
 
 
@@ -340,10 +345,14 @@ def build_rows(df: pd.DataFrame, cols: dict):
     marginpct = df[cols["MarginPct"]] if cols.get("MarginPct") else pd.Series([0.0] * n, index=df.index)
     marginpct_ops = df[cols["MarginPctOps"]] if cols.get("MarginPctOps") else pd.Series([None] * n, index=df.index)
 
-    # newly added numeric count columns
+    # numeric count columns
     centre_count = df[cols["CentreCount"]] if cols.get("CentreCount") else pd.Series([0.0] * n, index=df.index)
     total_candidate = df[cols["TotalCandidate"]] if cols.get("TotalCandidate") else pd.Series([0.0] * n, index=df.index)
     max_candidate = df[cols["MaxCandidate"]] if cols.get("MaxCandidate") else pd.Series([0.0] * n, index=df.index)
+
+    # newly added: Overall Subtotal / Subtotal (Ops) for the Subtotal Details tab
+    overall_subtotal = df[cols["OverallSubtotal"]] if cols.get("OverallSubtotal") else pd.Series([0.0] * n, index=df.index)
+    subtotal_ops = df[cols["SubtotalOps"]] if cols.get("SubtotalOps") else pd.Series([0.0] * n, index=df.index)
 
     out = pd.DataFrame({
         "projectCode": df["_ProjectCode"],
@@ -364,11 +373,14 @@ def build_rows(df: pd.DataFrame, cols: dict):
         "margin": margin.fillna(0),
         "marginPct": marginpct.fillna(0),
         "marginPctOps": marginpct_ops,
-        # newly added fields for the "All Projects" table
+        # fields for the "All Projects" table
         "centreCount": centre_count.fillna(0),
         "totalCandidate": total_candidate.fillna(0),
         "maxCandidate": max_candidate.fillna(0),
         "opGuardData": _series_or_blank(df, cols, "OpGuardActualCamVoipNode", n),
+        # fields for the "Subtotal Details" tab
+        "overallSubtotal": overall_subtotal.fillna(0),
+        "subtotalOps": subtotal_ops.fillna(0),
     })
     return out.to_dict("records")
 
