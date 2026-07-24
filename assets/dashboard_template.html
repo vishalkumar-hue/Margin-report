@@ -168,6 +168,17 @@
   }
   .cmp-controls label{font-size:11.5px; color:var(--muted); display:block; margin-bottom:4px;}
   .cmp-controls .cmp-field{display:flex; flex-direction:column;}
+  /* ---- Top-N control (client-wise widgets) ---- */
+  .topn-input{
+    background:var(--panel-2); color:var(--text); border:1px solid var(--border);
+    border-radius:5px; padding:3px 7px; font-size:11.5px; width:58px; text-align:center;
+    font-family:inherit;
+  }
+  .topn-input:focus{outline:none; border-color:var(--gold);}
+  /* ---- Subtotal tab view toggle ---- */
+  .view-toggle{display:flex; gap:16px; align-items:center;}
+  .view-toggle label{font-size:12.5px; display:flex; align-items:center; gap:6px; cursor:pointer;}
+  .view-toggle input{accent-color: var(--gold);}
   @media (max-width: 980px){
     .kpis{grid-template-columns:repeat(2,1fr);}
     .grid, .grid3{grid-template-columns:1fr;}
@@ -201,6 +212,7 @@
     <button class="tabbtn" data-tab="comparison">Comparison</button>
     <button class="tabbtn" data-tab="quartercomp">Quarter Comparison</button>
     <button class="tabbtn" data-tab="projects">Project-wise</button>
+    <button class="tabbtn" data-tab="subtotal">Subtotal Details</button>
   </div>
 
   <div id="tab-overview" class="tabpage active">
@@ -220,7 +232,18 @@
 
   <div class="grid">
     <div class="card">
-      <h3>Top Clients by Revenue <span class="tag">top 10</span></h3>
+      <h3>Top Clients by Revenue <span class="tag">
+        Top <input type="text" class="topn-input" id="topNOverview" list="topNOptionsOverview" value="10"> clients
+        <datalist id="topNOptionsOverview">
+          <option value="5"></option>
+          <option value="10"></option>
+          <option value="15"></option>
+          <option value="20"></option>
+          <option value="50"></option>
+          <option value="100"></option>
+          <option value="All"></option>
+        </datalist>
+      </span></h3>
       <div class="chart-box"><canvas id="clientChart"></canvas></div>
     </div>
     <div class="card">
@@ -278,7 +301,18 @@
   <div class="kpis" id="clientsKpiRow"></div>
 
   <div class="card">
-    <h3>Top 15 Clients by Revenue <span class="tag">bar chart</span></h3>
+    <h3>Top Clients by Revenue <span class="tag">
+      Top <input type="text" class="topn-input" id="topNClientAnalysis" list="topNOptionsClientAnalysis" value="15"> clients, bar chart
+      <datalist id="topNOptionsClientAnalysis">
+        <option value="5"></option>
+        <option value="10"></option>
+        <option value="15"></option>
+        <option value="20"></option>
+        <option value="50"></option>
+        <option value="100"></option>
+        <option value="All"></option>
+      </datalist>
+    </span></h3>
     <div class="chart-box tall"><canvas id="clientAnalysisChart"></canvas></div>
   </div>
 
@@ -463,6 +497,30 @@
 
   </div>
 
+  <div id="tab-subtotal" class="tabpage">
+
+  <div class="card">
+    <h3>Subtotal Details <span class="tag">Total Candidate · Op/Guard Actual Count/Cam Count/VOIP · Overall Subtotal · Subtotal (Ops)</span></h3>
+    <div class="search-row view-toggle">
+      <label><input type="radio" name="subtotalView" id="subtotalViewProject" value="project" checked> Project-wise</label>
+      <label><input type="radio" name="subtotalView" id="subtotalViewClient" value="client"> Client-wise</label>
+    </div>
+  </div>
+
+  <div class="kpis" id="subtotalKpiRow"></div>
+
+  <div class="card">
+    <h3>Subtotal Table <span class="tag" id="subtotalTableTag"></span></h3>
+    <div class="scroll-table">
+    <table id="subtotalTable">
+      <thead id="subtotalTableHead"></thead>
+      <tbody></tbody>
+    </table>
+    </div>
+  </div>
+
+  </div>
+
 </div>
 
 <script>
@@ -487,6 +545,17 @@ const fmtCr = v => {
 };
 // fmtNum: formats a number using Indian digit grouping (e.g. 12,34,567).
 const fmtNum = v => Number(v).toLocaleString('en-IN');
+
+// parseTopN: reads a Top-N control's value (typed or picked from the
+// datalist) and returns a positive integer, or Infinity for "All"/blank/
+// invalid input (which means "no limit, show everything").
+function parseTopN(value){
+  if (value === null || value === undefined) return Infinity;
+  const v = String(value).trim().toLowerCase();
+  if (v === '' || v === 'all' || v === '0') return Infinity;
+  const n = parseInt(v, 10);
+  return (isNaN(n) || n <= 0) ? Infinity : n;
+}
 
 Chart.defaults.color = '#8ea0c2';
 Chart.defaults.font.family = "'Segoe UI', Arial, sans-serif";
@@ -575,6 +644,7 @@ function renderTab(tabId){
   else if (tabId === 'tab-comparison') populateCmpGroups();
   else if (tabId === 'tab-quartercomp') renderQuarterTab();
   else if (tabId === 'tab-projects') renderProjectTab();
+  else if (tabId === 'tab-subtotal') renderSubtotalTab();
 }
 
 // buildFilterBar: builds one multi-select dropdown per entry in FILTER_DEFS.
@@ -858,13 +928,16 @@ function renderStatus(){
   });
 }
 
-// renderClient: horizontal bar chart of top-10 clients by revenue.
+// renderClient: horizontal bar chart of top-N clients by revenue (N from the
+// "Top" input above this chart; shared with the Client-wise Summary table).
 function renderClient(){
   destroy('client');
   const ctx = document.getElementById('clientChart');
   const rows = getFilteredRows();
   const agg = aggregateBy(rows, 'client');
-  const top = [...agg].sort((a,b)=>b.Revenue-a.Revenue).slice(0,10);
+  const sorted = [...agg].sort((a,b)=>b.Revenue-a.Revenue);
+  const n = (typeof topNOverview !== 'undefined') ? topNOverview : 10;
+  const top = n === Infinity ? sorted : sorted.slice(0, n);
   const rawKeys = top.map(c=>c.key);
   charts.client = new Chart(ctx, {
     type:'bar',
@@ -956,19 +1029,24 @@ function renderInvoice(){
   });
 }
 
-// renderTable: fills the "Client-wise Summary" table on the Overview tab.
+// renderTable: fills the "Client-wise Summary" table on the Overview tab,
+// limited to the top N clients by revenue (N shared with the chart above,
+// via the topNOverview control).
 function renderTable(){
   const tbody = document.querySelector('#clientTable tbody');
   tbody.innerHTML='';
   const rows = getFilteredRows();
-  const agg = [...aggregateBy(rows, 'client')].sort((a,b)=>b.Revenue-a.Revenue);
+  let agg = [...aggregateBy(rows, 'client')].sort((a,b)=>b.Revenue-a.Revenue);
+  const fullCount = agg.length;
+  const n = (typeof topNOverview !== 'undefined') ? topNOverview : Infinity;
+  if (n !== Infinity) agg = agg.slice(0, n);
   agg.forEach(c=>{
     const tr = document.createElement('tr');
     const pillClass = c.MarginPct >= 60 ? 'good' : (c.MarginPct >=0 ? 'mid':'bad');
     tr.innerHTML = `<td>${c.key}</td><td class="num">${c.Projects}</td><td class="num">${fmtCr(c.Revenue)}</td><td class="num">${fmtCr(c.Margin)}</td><td class="num"><span class="pill ${pillClass}">${c.MarginPct.toFixed(1)}%</span></td>`;
     tbody.appendChild(tr);
   });
-  document.getElementById('clientTableTag').textContent = agg.length + ' clients';
+  document.getElementById('clientTableTag').textContent = (n === Infinity ? agg.length + ' clients' : agg.length + ' of ' + fullCount + ' clients (top ' + n + ')');
 }
 
 // renderAll: redraws every widget on the Overview tab (called whenever filters change).
@@ -982,6 +1060,19 @@ function renderAll(){
   renderInvoice();
   renderTable();
 }
+
+// ---- Top-N control wiring (Overview tab: chart + Client-wise Summary table) ----
+let topNOverview = 10;
+document.getElementById('topNOverview').addEventListener('input', e=>{
+  topNOverview = parseTopN(e.target.value);
+  renderClient();
+  renderTable();
+});
+document.getElementById('topNOverview').addEventListener('change', e=>{
+  topNOverview = parseTopN(e.target.value);
+  renderClient();
+  renderTable();
+});
 
 // ---------------- Monthly Trend tab (mirrors Excel "Monthly Trend" sheet) ----------------
 
@@ -1094,6 +1185,7 @@ function renderMonthlyTab(){
 
 // ---------------- Client Analysis tab (mirrors Excel "Client Analysis" sheet) ----------------
 let clientSearchTerm = '';
+let topNClientAnalysis = 15;
 
 function renderClientsKPIs(agg){
   const row = document.getElementById('clientsKpiRow');
@@ -1114,10 +1206,13 @@ function renderClientsKPIs(agg){
   });
 }
 
+// renderClientAnalysisChart: bar chart of top-N clients by revenue (N from
+// the "Top" input above this chart; shared with the table below).
 function renderClientAnalysisChart(agg){
   destroy('clientAnalysis');
   const ctx = document.getElementById('clientAnalysisChart');
-  const top = agg.slice(0,15);
+  const n = (typeof topNClientAnalysis !== 'undefined' && topNClientAnalysis !== Infinity) ? topNClientAnalysis : agg.length;
+  const top = agg.slice(0, n);
   const rawKeys = top.map(c=>c.key);
   charts.clientAnalysis = new Chart(ctx, {
     type:'bar',
@@ -1137,18 +1232,23 @@ function renderClientAnalysisChart(agg){
   });
 }
 
+// renderClientAnalysisTable: applies both the free-text search AND the
+// top-N limit (N shared with the chart above).
 function renderClientAnalysisTable(agg){
   const tbody = document.querySelector('#clientAnalysisTable tbody');
   tbody.innerHTML = '';
   const term = clientSearchTerm.trim().toLowerCase();
-  const filtered = term ? agg.filter(c => c.key.toLowerCase().includes(term)) : agg;
+  let filtered = term ? agg.filter(c => c.key.toLowerCase().includes(term)) : agg;
+  const fullCount = filtered.length;
+  const n = (typeof topNClientAnalysis !== 'undefined' && topNClientAnalysis !== Infinity) ? topNClientAnalysis : filtered.length;
+  filtered = filtered.slice(0, n);
   filtered.forEach(c=>{
     const tr = document.createElement('tr');
     const pillClass = c.MarginPct >= 60 ? 'good' : (c.MarginPct >=0 ? 'mid':'bad');
     tr.innerHTML = `<td>${c.key}</td><td class="num">${fmtCr(c.Revenue)}</td><td class="num">${fmtCr(c.Margin)}</td><td class="num"><span class="pill ${pillClass}">${c.MarginPct.toFixed(1)}%</span></td><td class="num">${fmtNum(c.Projects)}</td>`;
     tbody.appendChild(tr);
   });
-  document.getElementById('clientAnalysisTableTag').textContent = filtered.length + ' of ' + agg.length + ' clients';
+  document.getElementById('clientAnalysisTableTag').textContent = filtered.length + ' of ' + fullCount + ' clients';
 }
 
 function renderClientsTab(){
@@ -1165,6 +1265,17 @@ document.getElementById('clientSearch').addEventListener('input', e=>{
   const agg = [...aggregateBy(rows, 'client')].sort((a,b)=>b.Revenue-a.Revenue);
   renderClientAnalysisTable(agg);
 });
+
+// ---- Top-N control wiring (Client Analysis tab: chart + table) ----
+function handleTopNClientAnalysisChange(e){
+  topNClientAnalysis = parseTopN(e.target.value);
+  const rows = getFilteredRows();
+  const agg = [...aggregateBy(rows, 'client')].sort((a,b)=>b.Revenue-a.Revenue);
+  renderClientAnalysisChart(agg);
+  renderClientAnalysisTable(agg);
+}
+document.getElementById('topNClientAnalysis').addEventListener('input', handleTopNClientAnalysisChange);
+document.getElementById('topNClientAnalysis').addEventListener('change', handleTopNClientAnalysisChange);
 
 // ---------------- Service Analysis tab (mirrors Excel "Service Analysis" sheet) ----------------
 function renderServicesKPIs(agg){
@@ -1684,6 +1795,85 @@ document.getElementById('posOnly').addEventListener('change', e=>{
   projPosOnly = e.target.checked;
   if(projPosOnly){ projNegOnly = false; document.getElementById('negOnly').checked = false; }
   renderProjectTable();
+});
+
+// ---------------- Subtotal Details tab (Total Candidate, Op/Guard Actual
+// Count/Cam Count/VOIP, Overall Subtotal, Subtotal (Ops)) ----------------
+let subtotalView = 'project';
+
+function renderSubtotalKPIs(rows){
+  const row = document.getElementById('subtotalKpiRow');
+  row.innerHTML = '';
+  const totalCandidate = rows.reduce((a,b)=>a+(b.totalCandidate||0),0);
+  const totalOverallSubtotal = rows.reduce((a,b)=>a+(b.overallSubtotal||0),0);
+  const totalSubtotalOps = rows.reduce((a,b)=>a+(b.subtotalOps||0),0);
+  const items = [
+    {label:'Total Candidate', value: fmtNum(Math.round(totalCandidate))},
+    {label:'Overall Subtotal', value: fmtCr(totalOverallSubtotal)},
+    {label:'Subtotal (Ops)', value: fmtCr(totalSubtotalOps)},
+    {label:'Rows in View', value: fmtNum(rows.length)},
+  ];
+  items.forEach(it=>{
+    const div = document.createElement('div'); div.className='kpi';
+    div.innerHTML = `<div class="label">${it.label}</div><div class="value">${it.value}</div>`;
+    row.appendChild(div);
+  });
+}
+
+// renderSubtotalTable: shows Total Candidate / Op-Guard-Cam-VOIP / Overall
+// Subtotal / Subtotal (Ops), either one row per project ("Project-wise") or
+// aggregated per client ("Client-wise" - numeric fields summed; the
+// Op/Guard field is a combined text cell per project so it's shown as an
+// entry count rather than summed).
+function renderSubtotalTable(rows){
+  const thead = document.getElementById('subtotalTableHead');
+  const tbody = document.querySelector('#subtotalTable tbody');
+  tbody.innerHTML = '';
+
+  if (subtotalView === 'project'){
+    thead.innerHTML = `<tr><th>Project Code</th><th>Client</th><th class="num">Total Candidate</th><th>Op/Guard Actual Count/Cam Count/VOIP</th><th class="num">Overall Subtotal</th><th class="num">Subtotal (Ops)</th></tr>`;
+    rows.forEach(p=>{
+      const tr = document.createElement('tr');
+      tr.innerHTML = `<td>${p.projectCode}</td><td>${p.client}</td><td class="num">${fmtNum(Math.round(p.totalCandidate||0))}</td><td>${p.opGuardData||''}</td><td class="num">${fmtNum(Math.round(p.overallSubtotal||0))}</td><td class="num">${fmtNum(Math.round(p.subtotalOps||0))}</td>`;
+      tbody.appendChild(tr);
+    });
+    document.getElementById('subtotalTableTag').textContent = rows.length + ' projects';
+  } else {
+    thead.innerHTML = `<tr><th>Client</th><th class="num">Total Candidate</th><th>Op/Guard Actual Count/Cam Count/VOIP</th><th class="num">Overall Subtotal</th><th class="num">Subtotal (Ops)</th><th class="num">Projects</th></tr>`;
+    const map = new Map();
+    rows.forEach(r=>{
+      const key = r.client || '(blank)';
+      if (!map.has(key)) map.set(key, {TotalCandidate:0, OverallSubtotal:0, SubtotalOps:0, Projects:0, opGuardCount:0});
+      const g = map.get(key);
+      g.TotalCandidate += (r.totalCandidate||0);
+      g.OverallSubtotal += (r.overallSubtotal||0);
+      g.SubtotalOps += (r.subtotalOps||0);
+      g.Projects += 1;
+      if (r.opGuardData) g.opGuardCount += 1;
+    });
+    const agg = Array.from(map.entries()).map(([key,g])=>({key, ...g})).sort((a,b)=>b.OverallSubtotal-a.OverallSubtotal);
+    agg.forEach(c=>{
+      const tr = document.createElement('tr');
+      tr.innerHTML = `<td>${c.key}</td><td class="num">${fmtNum(Math.round(c.TotalCandidate))}</td><td>${c.opGuardCount} entries</td><td class="num">${fmtNum(Math.round(c.OverallSubtotal))}</td><td class="num">${fmtNum(Math.round(c.SubtotalOps))}</td><td class="num">${fmtNum(c.Projects)}</td>`;
+      tbody.appendChild(tr);
+    });
+    document.getElementById('subtotalTableTag').textContent = agg.length + ' clients';
+  }
+}
+
+function renderSubtotalTab(){
+  const rows = getFilteredRows();
+  renderSubtotalKPIs(rows);
+  renderSubtotalTable(rows);
+}
+
+document.querySelectorAll('input[name="subtotalView"]').forEach(radio=>{
+  radio.addEventListener('change', e=>{
+    if (e.target.checked){
+      subtotalView = e.target.value;
+      renderSubtotalTab();
+    }
+  });
 });
 
 // ---- initial page load ----
