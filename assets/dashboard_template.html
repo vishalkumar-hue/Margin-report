@@ -802,7 +802,12 @@ function drillFilter(key, value){
 
 // ---------------- Client-side aggregation from row-level data ----------------
 // aggregateBy: groups rows by a field and sums Revenue/Margin/Projects,
-// then derives MarginPct per group. Used for client/service/month charts.
+// then derives MarginPct per group AS A WEIGHTED RATIO (sum of margin over
+// sum of revenue for that group) - never as a simple average of each row's
+// own margin %. Averaging row-level percentages directly would over/under-
+// weight small projects vs big ones (e.g. 10 projects with wildly different
+// revenue but averaging to "15%" doesn't reflect the group's real combined
+// margin). Used for client/service/month/quarter charts & tables.
 function aggregateBy(rows, field){
   const map = new Map();
   rows.forEach(r => {
@@ -815,6 +820,7 @@ function aggregateBy(rows, field){
   });
   return Array.from(map.entries()).map(([key, g]) => ({
     key, Revenue: g.Revenue, Margin: g.Margin, Projects: g.Projects,
+    // Margin % = (sum of Margin Amount Based On Overall Subtotal) / (sum of Revenue) * 100
     MarginPct: g.Revenue !== 0 ? (g.Margin / g.Revenue * 100) : 0
   }));
 }
@@ -856,8 +862,15 @@ function destroy(id){ if(charts[id]){ charts[id].destroy(); } }
 function renderKPIs(){
   const rows = getFilteredRows();
   const totalRevenue = rows.reduce((a,b)=>a+(b.revenue||0),0);
+  const totalMarginAmt = rows.reduce((a,b)=>a+(b.margin||0),0);
   const totalProjects = rows.length;
-  const avgMargin = rows.length ? (rows.reduce((a,b)=>a+(b.marginPct||0),0)/rows.length) : 0;
+  // Blended (portfolio-level) Margin % = sum(Margin Amount)/sum(Revenue)*100 -
+  // NOT a plain average of each project's own margin %. A simple average
+  // (sum of marginPct / count) lets a handful of tiny projects with an
+  // extreme margin % skew the headline number away from where the actual
+  // rupees are; this weighted version always matches Revenue-Overall
+  // Subtotal totals added up first, then divided - same as an Excel subtotal.
+  const avgMargin = totalRevenue !== 0 ? (totalMarginAmt / totalRevenue * 100) : 0;
   const invoiceAgg = aggregateCount(rows, 'invoiceStatus');
   const pendingCount = invoiceAgg.find(i=>/pending/i.test(i.key))?.Count || 0;
   const statusAgg = aggregateCount(rows, 'projectStatus');
@@ -997,7 +1010,7 @@ function renderService(){
       },
       scales:{
         x:{ticks:{autoSkip:false, maxRotation:60, minRotation:45, font:{size:10}}},
-        y:{ min: -40, max: 120,title:{display:true,text:'%'}}
+        y:{title:{display:true,text:'%'}}
       },
       onClick:(evt, elements)=>{ if(elements.length) drillFilter('service', rawKeys[elements[0].index]); }
     }
@@ -1113,8 +1126,12 @@ function forecastGrowth(agg, field){
 }
 
 // forecastAverage: projects the next value for a ratio field (Margin %) as the
-// simple average of the last up-to-3 months, which is more stable than
-// compounding a growth rate on a percentage.
+// simple average of the last up-to-3 ALREADY-CORRECTLY-WEIGHTED monthly
+// values (each month's MarginPct here comes from aggregateBy, i.e. it is
+// itself sum(Margin)/sum(Revenue) for that month - not a per-project
+// average). Averaging a few of those correct monthly figures for a forward
+// projection is fine; what must never happen is averaging raw per-project
+// margin % values, which this function does not do.
 function forecastAverage(agg, field){
   if (!agg.length) return null;
   const recent = agg.slice(-Math.min(3, agg.length));
@@ -1213,12 +1230,19 @@ function renderClientsKPIs(agg){
   row.innerHTML = '';
   const totalRevenue = agg.reduce((a,b)=>a+b.Revenue,0);
   const totalMargin = agg.reduce((a,b)=>a+b.Margin,0);
-  const avgMarginPct = agg.length ? (agg.reduce((a,b)=>a+b.MarginPct,0)/agg.length) : 0;
+  // Blended Margin % across ALL selected clients = sum(Margin)/sum(Revenue)*100.
+  // Each client's own MarginPct (from aggregateBy) is already correctly
+  // weighted at the client level; but rolling THOSE up into one more number
+  // must again use sum(Margin)/sum(Revenue), not a plain mean of the
+  // per-client percentages - otherwise a client with 2 tiny projects at 90%
+  // margin would pull the headline number up just as much as a client
+  // doing 10x the revenue at 40% margin, which misrepresents the portfolio.
+  const blendedMarginPct = totalRevenue !== 0 ? (totalMargin / totalRevenue * 100) : 0;
   const items = [
     {label:'Total Clients', value: fmtNum(agg.length)},
     {label:'Total Revenue', value: fmtCr(totalRevenue)},
     {label:'Total Margin', value: fmtCr(totalMargin)},
-    {label:'Avg Margin % (across clients)', value: avgMarginPct.toFixed(1)+'%'},
+    {label:'Blended Margin % (overall)', value: blendedMarginPct.toFixed(1)+'%'},
   ];
   items.forEach(it=>{
     const div = document.createElement('div'); div.className='kpi';
@@ -1949,30 +1973,51 @@ document.getElementById('posOnly').addEventListener('change', e=>{
 // ---------------- Subtotal Details tab (Total Candidate, Op/Guard Actual
 // Count/Cam Count/VOIP, Overall Subtotal, Subtotal (Ops), Per Candidate
 // Subtotal Overall/Ops, Per Camera/OP/Guard Subtotal Overall/Ops) ----------------
+//
+// IMPORTANT (this is the fix the user asked for): "Per Candidate" and
+// "Per Camera/OP/Guard" are RATE fields (an amount divided by a headcount).
+// Whenever more than one project/row is rolled into one number - the KPI
+// row (all filtered rows) or the Client-wise table (all of a client's
+// projects) - the correct way to combine rates is:
+//     SUM(numerator across the rows) / SUM(denominator across the rows)
+// exactly like an Excel/Google Sheets subtotal-then-divide. It is NOT:
+//     AVERAGE(each row's own already-divided rate)
+// The two only match when every row has an identical denominator, which is
+// never the case here (different projects have different candidate counts /
+// centre counts). Averaging the per-row rates directly gives every project
+// equal weight regardless of size, which distorts the true blended rate -
+// the same issue as averaging Margin % instead of summing Margin/Revenue.
 let subtotalView = 'project';
 
 function renderSubtotalKPIs(rows){
   const row = document.getElementById('subtotalKpiRow');
   row.innerHTML = '';
-  const n = rows.length || 1;
   const totalCandidate = rows.reduce((a,b)=>a+(b.totalCandidate||0),0);
+  const totalCentreCount = rows.reduce((a,b)=>a+(b.centreCount||0),0);
   const totalOverallSubtotal = rows.reduce((a,b)=>a+(b.overallSubtotal||0),0);
   const totalSubtotalOps = rows.reduce((a,b)=>a+(b.subtotalOps||0),0);
-  const avgPerCandidateOverall = rows.reduce((a,b)=>a+(b.perCandidateSubtotalOverall||0),0)/n;
-  const avgPerCandidateOps = rows.reduce((a,b)=>a+(b.perCandidateSubtotalOps||0),0)/n;
-  const avgPerCameraOverall = rows.reduce((a,b)=>a+(b.perCameraOpGuardSubtotalOverall||0),0)/n;
-  const avgPerCameraOps = rows.reduce((a,b)=>a+(b.perCameraOpGuardSubtotalOps||0),0)/n;
+
+  // Per Candidate (Overall/Ops) = SUM(Overall Subtotal or Subtotal Ops) / SUM(Total Candidate)
+  // across all rows currently in view - not an average of each project's own rate.
+  const perCandidateOverall = totalCandidate ? (totalOverallSubtotal / totalCandidate) : 0;
+  const perCandidateOps = totalCandidate ? (totalSubtotalOps / totalCandidate) : 0;
+  // Per Camera/OP/Guard (Overall/Ops) = SUM(Overall Subtotal or Subtotal Ops) / SUM(Centre Count)
+  // (Centre Count is used as the numeric proxy for camera/OP/guard units, same as the
+  // per-row calculation this mirrors.)
+  const perCameraOverall = totalCentreCount ? (totalOverallSubtotal / totalCentreCount) : 0;
+  const perCameraOps = totalCentreCount ? (totalSubtotalOps / totalCentreCount) : 0;
+
   const items = [
     { label: 'Total Candidate', value: fmtNum(Math.round(totalCandidate)) },
-  { label: 'Overall Subtotal', value: fmtCr(totalOverallSubtotal) },
-  { label: 'Subtotal (Ops)', value: fmtCr(totalSubtotalOps) },
-  { label: 'Rows in View', value: fmtNum(rows.length) },
+    { label: 'Overall Subtotal', value: fmtCr(totalOverallSubtotal) },
+    { label: 'Subtotal (Ops)', value: fmtCr(totalSubtotalOps) },
+    { label: 'Rows in View', value: fmtNum(rows.length) },
 
-  { label: 'Avg Per Candidate (Overall)', value: fmtNum(Math.round(avgPerCandidateOverall)) },
-  { label: 'Avg Per Candidate (Ops)', value: fmtNum(Math.round(avgPerCandidateOps)) },
-  { label: 'Avg Per Camera/OP/Guard (Overall)', value: fmtNum(Math.round(avgPerCameraOverall)) },
-  { label: 'Avg Per Camera/OP/Guard (Ops)', value: fmtNum(Math.round(avgPerCameraOps)) },
-];
+    { label: 'Per Candidate (Overall)', value: fmtNum(Math.round(perCandidateOverall)) },
+    { label: 'Per Candidate (Ops)', value: fmtNum(Math.round(perCandidateOps)) },
+    { label: 'Per Camera/OP/Guard (Overall)', value: fmtNum(Math.round(perCameraOverall)) },
+    { label: 'Per Camera/OP/Guard (Ops)', value: fmtNum(Math.round(perCameraOps)) },
+  ];
   items.forEach(it=>{
     const div = document.createElement('div'); div.className='kpi';
     div.innerHTML = `<div class="label">${it.label}</div><div class="value">${it.value}</div>`;
@@ -1983,11 +2028,13 @@ function renderSubtotalKPIs(rows){
 // renderSubtotalTable: shows Total Candidate / Op-Guard-Cam-VOIP / Overall
 // Subtotal / Subtotal (Ops) / Per Candidate Subtotal (Overall & Ops) / Per
 // Camera-OP-Guard Subtotal (Overall & Ops), either one row per project
-// ("Project-wise") or aggregated per client ("Client-wise" - Total
-// Candidate/Overall Subtotal/Subtotal (Ops) are summed across the client's
-// projects; the 4 "per unit" columns are rate metrics so they're averaged
-// across the client's projects instead of summed; the Op/Guard field is a
-// combined text cell per project so it's shown as an entry count).
+// ("Project-wise" - each project's own already-correct rate, straight from
+// the data) or aggregated per client ("Client-wise" - Total Candidate /
+// Centre Count / Overall Subtotal / Subtotal (Ops) are summed across the
+// client's projects first, and ONLY THEN are the 4 "per unit" rate columns
+// computed as sum(numerator)/sum(denominator) - never as a mean of the
+// per-project rates. The Op/Guard field is a combined text cell per project
+// so it's shown as an entry count).
 function renderSubtotalTable(rows){
   const thead = document.getElementById('subtotalTableHead');
   const tbody = document.querySelector('#subtotalTable tbody');
@@ -2002,35 +2049,35 @@ function renderSubtotalTable(rows){
     });
     document.getElementById('subtotalTableTag').textContent = rows.length + ' projects';
   } else {
-    thead.innerHTML = `<tr><th>Client</th><th class="num">Total Candidate</th><th>Op/Guard Actual Count/Cam Count/VOIP</th><th class="num">Overall Subtotal</th><th class="num">Subtotal (Ops)</th><th class="num">Avg Per Candidate Subtotal OverlAll</th><th class="num">Avg Per Candidate Subtotal Ops</th><th class="num">Avg Per Camera/OP/Gaurd Subtotal OverlAll</th><th class="num">Avg Per Camera/OP/Gaurd Subtotal Ops</th><th class="num">Projects</th></tr>`;
+    thead.innerHTML = `<tr><th>Client</th><th class="num">Total Candidate</th><th>Op/Guard Actual Count/Cam Count/VOIP</th><th class="num">Overall Subtotal</th><th class="num">Subtotal (Ops)</th><th class="num">Per Candidate Subtotal OverlAll</th><th class="num">Per Candidate Subtotal Ops</th><th class="num">Per Camera/OP/Gaurd Subtotal OverlAll</th><th class="num">Per Camera/OP/Gaurd Subtotal Ops</th><th class="num">Projects</th></tr>`;
     const map = new Map();
     rows.forEach(r=>{
       const key = r.client || '(blank)';
       if (!map.has(key)) map.set(key, {
-        TotalCandidate:0, OverallSubtotal:0, SubtotalOps:0, Projects:0, opGuardCount:0,
-        PerCandidateOverallSum:0, PerCandidateOpsSum:0, PerCameraOverallSum:0, PerCameraOpsSum:0,
+        TotalCandidate:0, CentreCount:0, OverallSubtotal:0, SubtotalOps:0, Projects:0, opGuardCount:0,
       });
       const g = map.get(key);
       g.TotalCandidate += (r.totalCandidate||0);
+      g.CentreCount += (r.centreCount||0);
       g.OverallSubtotal += (r.overallSubtotal||0);
       g.SubtotalOps += (r.subtotalOps||0);
       g.Projects += 1;
       if (r.opGuardData) g.opGuardCount += 1;
-      g.PerCandidateOverallSum += (r.perCandidateSubtotalOverall||0);
-      g.PerCandidateOpsSum += (r.perCandidateSubtotalOps||0);
-      g.PerCameraOverallSum += (r.perCameraOpGuardSubtotalOverall||0);
-      g.PerCameraOpsSum += (r.perCameraOpGuardSubtotalOps||0);
     });
+    // Client-level "per unit" rates = SUM(Overall Subtotal / Subtotal Ops) / SUM(Total
+    // Candidate / Centre Count) for that client - a subtotal-then-divide, matching
+    // exactly how the Excel/Sheets version would roll these up. This replaces the old
+    // (incorrect) approach of averaging each project's own per-unit rate.
     const agg = Array.from(map.entries()).map(([key,g])=>({
       key, ...g,
-      AvgPerCandidateOverall: g.Projects ? g.PerCandidateOverallSum/g.Projects : 0,
-      AvgPerCandidateOps: g.Projects ? g.PerCandidateOpsSum/g.Projects : 0,
-      AvgPerCameraOverall: g.Projects ? g.PerCameraOverallSum/g.Projects : 0,
-      AvgPerCameraOps: g.Projects ? g.PerCameraOpsSum/g.Projects : 0,
+      PerCandidateSubtotalOverall: g.TotalCandidate ? (g.OverallSubtotal / g.TotalCandidate) : 0,
+      PerCandidateSubtotalOps: g.TotalCandidate ? (g.SubtotalOps / g.TotalCandidate) : 0,
+      PerCameraOpGuardSubtotalOverall: g.CentreCount ? (g.OverallSubtotal / g.CentreCount) : 0,
+      PerCameraOpGuardSubtotalOps: g.CentreCount ? (g.SubtotalOps / g.CentreCount) : 0,
     })).sort((a,b)=>b.OverallSubtotal-a.OverallSubtotal);
     agg.forEach(c=>{
       const tr = document.createElement('tr');
-      tr.innerHTML = `<td>${c.key}</td><td class="num">${fmtNum(Math.round(c.TotalCandidate))}</td><td>${c.opGuardCount} entries</td><td class="num">${fmtNum(Math.round(c.OverallSubtotal))}</td><td class="num">${fmtNum(Math.round(c.SubtotalOps))}</td><td class="num">${fmtNum(Math.round(c.AvgPerCandidateOverall))}</td><td class="num">${fmtNum(Math.round(c.AvgPerCandidateOps))}</td><td class="num">${fmtNum(Math.round(c.AvgPerCameraOverall))}</td><td class="num">${fmtNum(Math.round(c.AvgPerCameraOps))}</td><td class="num">${fmtNum(c.Projects)}</td>`;
+      tr.innerHTML = `<td>${c.key}</td><td class="num">${fmtNum(Math.round(c.TotalCandidate))}</td><td>${c.opGuardCount} entries</td><td class="num">${fmtNum(Math.round(c.OverallSubtotal))}</td><td class="num">${fmtNum(Math.round(c.SubtotalOps))}</td><td class="num">${fmtNum(Math.round(c.PerCandidateSubtotalOverall))}</td><td class="num">${fmtNum(Math.round(c.PerCandidateSubtotalOps))}</td><td class="num">${fmtNum(Math.round(c.PerCameraOpGuardSubtotalOverall))}</td><td class="num">${fmtNum(Math.round(c.PerCameraOpGuardSubtotalOps))}</td><td class="num">${fmtNum(c.Projects)}</td>`;
       tbody.appendChild(tr);
     });
     document.getElementById('subtotalTableTag').textContent = agg.length + ' clients';
