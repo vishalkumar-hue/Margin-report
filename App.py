@@ -90,11 +90,10 @@ def clean_numeric(series: pd.Series) -> pd.Series:
 #
 # STILL SUSPECT (Subtotal tab showing blank/zero data - likely the SAME
 # duplicate-header bug): "TotalCandidate", "OverallSubtotal", "SubtotalOps".
-# Run the app, open the "🔍 Debug: Column Resolution" expander right below
-# the KPI area, check which sheet column each one resolved to and whether
-# the sample values look right. Then fill in the correct column LETTER
-# below (open the sheet, look at the column letter above the header) and
-# remove/ignore the debug block once confirmed.
+# Run the app, open the "🔍 Debug: Subtotal tab column resolution" expander
+# right below the KPI area, check which sheet column each one resolved to
+# and whether the sample values look right. Then fill in the correct column
+# LETTER below (open the sheet, look at the column letter above the header).
 #
 # IMPORTANT: these are POSITION-based. If columns get added/removed/reordered
 # in the sheet later, re-check the letter for each field and update below.
@@ -350,8 +349,8 @@ def build_rows(df: pd.DataFrame, cols: dict):
     # --- Per Candidate / Per Camera-OP-Guard subtotal rate fields, used by
     # the Subtotal Details tab KPIs + table (previously referenced in the
     # HTML/JS as p.perCandidateSubtotalOverall etc. but NEVER computed here
-    # -> that's why those columns showed blank/0 even when Overall Subtotal /
-    # Subtotal (Ops) / Total Candidate resolve fine). Guard against
+    # -> this was ALSO causing blank data in those columns, on top of the
+    # duplicate-header column-resolution issue). Guard against
     # divide-by-zero with .replace(0, pd.NA).
     safe_total_candidate = total_candidate.replace(0, pd.NA)
     per_candidate_subtotal_overall = (overall_subtotal / safe_total_candidate).fillna(0)
@@ -412,17 +411,17 @@ if prepared_df.empty:
     st.warning("Sheet se koi valid row nahi mili. Column headers check karo.")
     st.stop()
 
-# # --- TEMP DEBUG: dekho konse actual sheet column resolve ho rahe hai for
-# # the 4 Subtotal-tab fields. Remove this block once you've confirmed the
-# # correct MANUAL_COLUMN_OVERRIDES letters above and the tab shows data. ---
-# with st.expander("🔍 Debug: Subtotal tab column resolution", expanded=True):
-#     for field in ["TotalCandidate", "OverallSubtotal", "SubtotalOps", "OpGuardActualCamVoipNode"]:
-#         actual_col = resolved_cols.get(field)
-#         st.write(f"**{field}** → resolved to sheet column: `{actual_col}`")
-#         if actual_col:
-#             st.write(prepared_df[actual_col].head(5).tolist())
-#         else:
-#             st.write("❌ NOT FOUND (name-matching failed - needs a MANUAL_COLUMN_OVERRIDES letter)")
+# --- TEMP DEBUG: dekho konse actual sheet column resolve ho rahe hai for
+# the 4 Subtotal-tab fields. Remove this block once you've confirmed the
+# correct MANUAL_COLUMN_OVERRIDES letters above and the tab shows data. ---
+with st.expander("🔍 Debug: Subtotal tab column resolution", expanded=False):
+    for field in ["TotalCandidate", "OverallSubtotal", "SubtotalOps", "OpGuardActualCamVoipNode"]:
+        actual_col = resolved_cols.get(field)
+        st.write(f"**{field}** → resolved to sheet column: `{actual_col}`")
+        if actual_col:
+            st.write(prepared_df[actual_col].head(5).tolist())
+        else:
+            st.write("❌ NOT FOUND (name-matching failed - needs a MANUAL_COLUMN_OVERRIDES letter)")
 # --- END DEBUG ---
 
 rows = build_rows(prepared_df, resolved_cols)
