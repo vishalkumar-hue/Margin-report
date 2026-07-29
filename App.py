@@ -54,7 +54,7 @@ def build_csv_url(sheet_id: str, sheet_name: str) -> str:
     return f"https://docs.google.com/spreadsheets/d/{sheet_id}/gviz/tq?tqx=out:csv&sheet={encoded_name}"
 
 
-@st.cache_data(ttl=60, show_spinner="Google Sheet se data la raha hu...")
+@st.cache_data(ttl=60, show_spinner="Geting Data From Google Sheet...")
 def load_raw_data(sheet_id: str, sheet_name: str) -> pd.DataFrame:
     url = build_csv_url(sheet_id, sheet_name)
     df = pd.read_csv(url)
