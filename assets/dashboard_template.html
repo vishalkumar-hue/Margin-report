@@ -608,6 +608,7 @@ const FILTER_DEFS = [
   {key:'client', label:'Client', field:'client'},
   {key:'clientSSC', label:'Client (With SSC)', field:'clientSSC'},
   {key:'projectCode', label:'Project Code', field:'projectCode'},
+  {key:'examNameDate', label:'Exam Name & Date', field:'examNameDate'},
   {key:'projectStatus', label:'Project Status', field:'projectStatus'},
   {key:'invoiceStatus', label:'Invoice Status', field:'invoiceStatus'},
   {key:'reviewInvoice', label:'Review (Raised/Pending)', field:'reviewInvoice'},
@@ -864,12 +865,6 @@ function renderKPIs(){
   const totalRevenue = rows.reduce((a,b)=>a+(b.revenue||0),0);
   const totalMarginAmt = rows.reduce((a,b)=>a+(b.margin||0),0);
   const totalProjects = rows.length;
-  // Blended (portfolio-level) Margin % = sum(Margin Amount)/sum(Revenue)*100 -
-  // NOT a plain average of each project's own margin %. A simple average
-  // (sum of marginPct / count) lets a handful of tiny projects with an
-  // extreme margin % skew the headline number away from where the actual
-  // rupees are; this weighted version always matches Revenue-Overall
-  // Subtotal totals added up first, then divided - same as an Excel subtotal.
   const avgMargin = totalRevenue !== 0 ? (totalMarginAmt / totalRevenue * 100) : 0;
   const invoiceAgg = aggregateCount(rows, 'invoiceStatus');
   const pendingCount = invoiceAgg.find(i=>/pending/i.test(i.key))?.Count || 0;
@@ -892,7 +887,6 @@ function renderKPIs(){
   });
 }
 
-// renderTrend: draws the Revenue/Margin (bar) + Margin % (line) trend chart by month.
 function renderTrend(){
   destroy('trend');
   const ctx = document.getElementById('trendChart');
@@ -930,7 +924,6 @@ function renderTrend(){
   });
 }
 
-// renderStatus: doughnut chart of project count by Project Status.
 function renderStatus(){
   destroy('status');
   const ctx = document.getElementById('statusChart');
@@ -954,8 +947,6 @@ function renderStatus(){
   });
 }
 
-// renderClient: horizontal bar chart of top-N clients by revenue (N from the
-// "Top" input above this chart; shared with the Client-wise Summary table).
 function renderClient(){
   destroy('client');
   const ctx = document.getElementById('clientChart');
@@ -983,10 +974,6 @@ function renderClient(){
   });
 }
 
-// renderService: bar chart of Margin % by service (red bars for negative margin).
-// Labels are truncated (full name still shown in the tooltip) and the tick
-// font/rotation is tuned so long service names don't overlap / spill outside
-// the chart box.
 function renderService(){
   destroy('service');
   const ctx = document.getElementById('serviceChart');
@@ -1017,9 +1004,6 @@ function renderService(){
   });
 }
 
-// renderScatter: bubble chart of Revenue vs Margin % per project (bubble size ~ revenue).
-// NOTE: intentionally NO permanent datalabels here - with hundreds of project
-// points the numbers would overlap into an unreadable mess. Hover tooltip stays.
 function renderScatter(){
   destroy('scatter');
   const ctx = document.getElementById('scatterChart');
@@ -1039,7 +1023,6 @@ function renderScatter(){
   });
 }
 
-// renderInvoice: pie chart of Review/Invoice status (raised vs pending etc).
 function renderInvoice(){
   destroy('invoice');
   const ctx = document.getElementById('invoiceChart');
@@ -1063,9 +1046,6 @@ function renderInvoice(){
   });
 }
 
-// renderTable: fills the "Client-wise Summary" table on the Overview tab,
-// limited to the top N clients by revenue (N shared with the chart above,
-// via the topNOverview control).
 function renderTable(){
   const tbody = document.querySelector('#clientTable tbody');
   tbody.innerHTML='';
@@ -1083,7 +1063,6 @@ function renderTable(){
   document.getElementById('clientTableTag').textContent = (n === Infinity ? agg.length + ' clients' : agg.length + ' of ' + fullCount + ' clients (top ' + n + ')');
 }
 
-// renderAll: redraws every widget on the Overview tab (called whenever filters change).
 function renderAll(){
   renderKPIs();
   renderTrend();
@@ -1095,7 +1074,6 @@ function renderAll(){
   renderTable();
 }
 
-// ---- Top-N control wiring (Overview tab: chart + Client-wise Summary table) ----
 let topNOverview = 10;
 document.getElementById('topNOverview').addEventListener('input', e=>{
   topNOverview = parseTopN(e.target.value);
@@ -1108,11 +1086,6 @@ document.getElementById('topNOverview').addEventListener('change', e=>{
   renderTable();
 });
 
-// ---------------- Monthly Trend tab (mirrors Excel "Monthly Trend" sheet) ----------------
-
-// forecastGrowth: projects the next value for an absolute field (Revenue/Margin)
-// using the average month-over-month growth rate of the last up-to-3 months.
-// Simple and transparent on purpose - no external forecasting library needed.
 function forecastGrowth(agg, field){
   if (agg.length < 2) return null;
   const recent = agg.slice(-Math.min(3, agg.length));
@@ -1125,13 +1098,6 @@ function forecastGrowth(agg, field){
   return recent[recent.length-1][field] * (1+avgGrowth);
 }
 
-// forecastAverage: projects the next value for a ratio field (Margin %) as the
-// simple average of the last up-to-3 ALREADY-CORRECTLY-WEIGHTED monthly
-// values (each month's MarginPct here comes from aggregateBy, i.e. it is
-// itself sum(Margin)/sum(Revenue) for that month - not a per-project
-// average). Averaging a few of those correct monthly figures for a forward
-// projection is fine; what must never happen is averaging raw per-project
-// margin % values, which this function does not do.
 function forecastAverage(agg, field){
   if (!agg.length) return null;
   const recent = agg.slice(-Math.min(3, agg.length));
@@ -1221,7 +1187,6 @@ function renderMonthlyTab(){
   renderMonthlyTable(agg);
 }
 
-// ---------------- Client Analysis tab (mirrors Excel "Client Analysis" sheet) ----------------
 let clientSearchTerm = '';
 let topNClientAnalysis = 15;
 
@@ -1230,13 +1195,6 @@ function renderClientsKPIs(agg){
   row.innerHTML = '';
   const totalRevenue = agg.reduce((a,b)=>a+b.Revenue,0);
   const totalMargin = agg.reduce((a,b)=>a+b.Margin,0);
-  // Blended Margin % across ALL selected clients = sum(Margin)/sum(Revenue)*100.
-  // Each client's own MarginPct (from aggregateBy) is already correctly
-  // weighted at the client level; but rolling THOSE up into one more number
-  // must again use sum(Margin)/sum(Revenue), not a plain mean of the
-  // per-client percentages - otherwise a client with 2 tiny projects at 90%
-  // margin would pull the headline number up just as much as a client
-  // doing 10x the revenue at 40% margin, which misrepresents the portfolio.
   const blendedMarginPct = totalRevenue !== 0 ? (totalMargin / totalRevenue * 100) : 0;
   const items = [
     {label:'Total Clients', value: fmtNum(agg.length)},
@@ -1251,8 +1209,6 @@ function renderClientsKPIs(agg){
   });
 }
 
-// renderClientAnalysisChart: bar chart of top-N clients by revenue (N from
-// the "Top" input above this chart; shared with the table below).
 function renderClientAnalysisChart(agg){
   destroy('clientAnalysis');
   const ctx = document.getElementById('clientAnalysisChart');
@@ -1277,8 +1233,6 @@ function renderClientAnalysisChart(agg){
   });
 }
 
-// renderClientAnalysisTable: applies both the free-text search AND the
-// top-N limit (N shared with the chart above).
 function renderClientAnalysisTable(agg){
   const tbody = document.querySelector('#clientAnalysisTable tbody');
   tbody.innerHTML = '';
@@ -1311,7 +1265,6 @@ document.getElementById('clientSearch').addEventListener('input', e=>{
   renderClientAnalysisTable(agg);
 });
 
-// ---- Top-N control wiring (Client Analysis tab: chart + table) ----
 function handleTopNClientAnalysisChange(e){
   topNClientAnalysis = parseTopN(e.target.value);
   const rows = getFilteredRows();
@@ -1322,7 +1275,6 @@ function handleTopNClientAnalysisChange(e){
 document.getElementById('topNClientAnalysis').addEventListener('input', handleTopNClientAnalysisChange);
 document.getElementById('topNClientAnalysis').addEventListener('change', handleTopNClientAnalysisChange);
 
-// ---------------- Service Analysis tab (mirrors Excel "Service Analysis" sheet) ----------------
 function renderServicesKPIs(agg){
   const row = document.getElementById('servicesKpiRow');
   row.innerHTML = '';
@@ -1391,7 +1343,6 @@ function renderServicesTab(){
   renderServiceAnalysisTable(agg);
 }
 
-// ---------------- Status Overview tab (mirrors Excel "Status Overview" sheet) ----------------
 function renderStatusChart(chartId, canvasId, agg, filterKey){
   destroy(chartId);
   const ctx = document.getElementById(canvasId);
@@ -1438,7 +1389,6 @@ function renderStatusTab(){
   renderStatusTable('statusReviewTable', reviewAgg);
 }
 
-// ---------------- Quarter Comparison tab (quarter-on-quarter, mirrors Monthly Trend) ----------------
 function renderQuarterKPIs(agg){
   const row = document.getElementById('quarterKpiRow');
   row.innerHTML = '';
@@ -1523,16 +1473,8 @@ function renderQuarterTab(){
   renderQuarterTable(agg);
 }
 
-// ---------------- Comparison tab (compare 2+ months/quarters/clients/services) ----------------
-
-// cmpSelectedGroups: the set of group keys currently ticked in the
-// "Groups to compare" multi-select for the Comparison tab.
 let cmpSelectedGroups = new Set();
 
-// populateCmpGroups: rebuilds the "Groups to compare" checklist whenever the
-// comparison dimension changes or the global filters change. Keeps
-// previously-ticked values where they still exist; otherwise defaults to the
-// top 3 groups by Revenue so the tab isn't empty on first load.
 function populateCmpGroups(){
   const dim = document.getElementById('cmpDimension').value;
   const rows = getFilteredRows();
@@ -1613,13 +1555,10 @@ document.getElementById('cmpGroupsList').addEventListener('change', ()=>{
   renderComparisonTab();
 });
 document.getElementById('cmpDimension').addEventListener('change', ()=>{
-  cmpSelectedGroups = new Set(); // dimension changed -> old selections don't apply, re-default
+  cmpSelectedGroups = new Set();
   populateCmpGroups();
 });
 
-// renderComparisonTab: shows Revenue / Margin / Margin % / Projects for every
-// selected group, side by side in a chart + a table with each group's delta
-// vs the first selected group (the baseline).
 function renderComparisonTab(){
   const dim = document.getElementById('cmpDimension').value;
   const rows = getFilteredRows();
@@ -1638,7 +1577,6 @@ function renderComparisonTab(){
 
   const groups = selected.map(key => ({ key, ...(map.get(key) || {Revenue:0, Margin:0, MarginPct:0, Projects:0}) }));
 
-  // KPI row: total revenue/margin across selected groups + count of groups
   const row = document.getElementById('cmpKpiRow');
   row.innerHTML = '';
   if (groups.length){
@@ -1660,7 +1598,6 @@ function renderComparisonTab(){
     });
   }
 
-  // Chart: one dataset per selected group, across Revenue/Margin/Margin%/Projects
   destroy('cmp');
   const ctx = document.getElementById('cmpChart');
   charts.cmp = new Chart(ctx, {
@@ -1684,7 +1621,6 @@ function renderComparisonTab(){
     }
   });
 
-  // Table: every selected group vs the FIRST selected group (baseline)
   const tbody = document.querySelector('#cmpTable tbody');
   tbody.innerHTML = '';
   const baseline = groups.length ? groups[0] : null;
@@ -1706,7 +1642,6 @@ function renderComparisonTab(){
   document.getElementById('cmpTableTag').textContent = groups.length + ' groups, vs ' + (baseline ? baseline.key : 'first selected');
 }
 
-// ---------------- Tab switching ----------------
 document.querySelectorAll('.tabbtn').forEach(btn=>{
   btn.addEventListener('click', ()=>{
     document.querySelectorAll('.tabbtn').forEach(b=>b.classList.remove('active'));
@@ -1718,35 +1653,21 @@ document.querySelectorAll('.tabbtn').forEach(btn=>{
   });
 });
 
-// ---------------- Project-wise tab ----------------
 let projSearchTerm = '';
 let projNegOnly = false;
 let projPosOnly = false;
 
-// colLabel: human-readable label for a column key used by the "All Projects"
-// column picker. All real sheet headers are shown as-is; the one synthetic
-// (computed, not present in the sheet) column gets a friendly label.
 function colLabel(c){
   return c === '_marginStatus' ? 'Margin Status' : c;
 }
 
-// PROJECT_COLUMN_OPTIONS: every column the "Columns" picker can show -
-// every original Google Sheet header (ALL_HEADERS) plus one computed
-// pseudo-column ("_marginStatus") that renders the Positive/Negative badge.
 const PROJECT_COLUMN_OPTIONS = [...ALL_HEADERS, '_marginStatus'];
 
-// projSelectedColumns: columns currently shown in the All Projects table.
-// Starts out matching the dashboard's previous fixed column set (plus the
-// margin-status badge), but the user can pick any subset of every sheet header.
 let projSelectedColumns = new Set([
   ...(DEFAULT_PROJECT_COLUMNS && DEFAULT_PROJECT_COLUMNS.length ? DEFAULT_PROJECT_COLUMNS : ALL_HEADERS),
   '_marginStatus'
 ]);
 
-// colValue: reads the display value for one column of one project row.
-// Real sheet columns come from row.allColumns (the full, unfiltered set of
-// columns from the Google Sheet); the pseudo margin-status column renders
-// a colored badge from the already-computed p.margin field.
 function colValue(p, col){
   if (col === '_marginStatus'){
     return (p.margin||0) < 0 ? '<span class="badge neg">Negative</span>' : '<span class="badge pos">Positive</span>';
@@ -1755,8 +1676,6 @@ function colValue(p, col){
   return (v === null || v === undefined) ? '' : String(v);
 }
 
-// buildProjColsPanel: fills the "Columns" picker for the All Projects table
-// with one checkbox per available sheet column (+ the margin-status pseudo-column).
 function buildProjColsPanel(){
   const listEl = document.getElementById('projColsList');
   listEl.innerHTML = '';
@@ -1824,7 +1743,6 @@ document.getElementById('projColsList').addEventListener('change', ()=>{
   renderProjectTable();
 });
 
-// renderProjKPIs: KPI cards on the Project-wise tab (neg/pos project counts, total negative margin).
 function renderProjKPIs(){
   const rows = getFilteredRows();
   const neg = rows.filter(p=>(p.margin||0)<0);
@@ -1845,9 +1763,6 @@ function renderProjKPIs(){
   });
 }
 
-// renderNegChart: horizontal bar chart of the worst 40 negative-margin projects.
-// Clicking a bar filters the "All Projects" table below down to that exact
-// project (via the search box) and scrolls it into view.
 function renderNegChart(){
   destroy('neg');
   const ctx = document.getElementById('negChart');
@@ -1884,7 +1799,6 @@ function renderNegChart(){
   });
 }
 
-// renderPosNegChart: doughnut chart of positive vs negative margin project counts.
 function renderPosNegChart(){
   destroy('posneg');
   const ctx = document.getElementById('posNegChart');
@@ -1907,10 +1821,6 @@ function renderPosNegChart(){
   });
 }
 
-// renderProjectTableHead: draws the "All Projects" table header based on
-// whichever columns are currently ticked in the Columns picker, in a fixed
-// order (every sheet header, then the margin-status pseudo-column).
-// Returns the resolved column list so renderProjectTable can reuse it for the body.
 function renderProjectTableHead(){
   const thead = document.getElementById('projectTableHead');
   const cols = PROJECT_COLUMN_OPTIONS.filter(c => projSelectedColumns.has(c));
@@ -1918,10 +1828,6 @@ function renderProjectTableHead(){
   return cols;
 }
 
-// renderProjectTable: fills the "All Projects" table, applying the free-text
-// search box and the "negative only" / "positive only" checkboxes on top of
-// the global filters, and rendering only the columns currently selected in
-// the Columns picker (built from every original Google Sheet header).
 function renderProjectTable(){
   const cols = renderProjectTableHead();
   const tbody = document.querySelector('#projectTable tbody');
@@ -1947,7 +1853,6 @@ function renderProjectTable(){
   document.getElementById('projTableTag').textContent = rows.length + ' of ' + ROWS.length + ' projects';
 }
 
-// renderProjectTab: redraws every widget on the Project-wise tab.
 function renderProjectTab(){
   renderProjKPIs();
   renderNegChart();
@@ -1970,23 +1875,6 @@ document.getElementById('posOnly').addEventListener('change', e=>{
   renderProjectTable();
 });
 
-// ---------------- Subtotal Details tab (Total Candidate, Op/Guard Actual
-// Count/Cam Count/VOIP, Overall Subtotal, Subtotal (Ops), Per Candidate
-// Subtotal Overall/Ops, Per Camera/OP/Guard Subtotal Overall/Ops) ----------------
-//
-// IMPORTANT (this is the fix the user asked for): "Per Candidate" and
-// "Per Camera/OP/Guard" are RATE fields (an amount divided by a headcount).
-// Whenever more than one project/row is rolled into one number - the KPI
-// row (all filtered rows) or the Client-wise table (all of a client's
-// projects) - the correct way to combine rates is:
-//     SUM(numerator across the rows) / SUM(denominator across the rows)
-// exactly like an Excel/Google Sheets subtotal-then-divide. It is NOT:
-//     AVERAGE(each row's own already-divided rate)
-// The two only match when every row has an identical denominator, which is
-// never the case here (different projects have different candidate counts /
-// centre counts). Averaging the per-row rates directly gives every project
-// equal weight regardless of size, which distorts the true blended rate -
-// the same issue as averaging Margin % instead of summing Margin/Revenue.
 let subtotalView = 'project';
 
 function renderSubtotalKPIs(rows){
@@ -1997,13 +1885,8 @@ function renderSubtotalKPIs(rows){
   const totalOverallSubtotal = rows.reduce((a,b)=>a+(b.overallSubtotal||0),0);
   const totalSubtotalOps = rows.reduce((a,b)=>a+(b.subtotalOps||0),0);
 
-  // Per Candidate (Overall/Ops) = SUM(Overall Subtotal or Subtotal Ops) / SUM(Total Candidate)
-  // across all rows currently in view - not an average of each project's own rate.
   const perCandidateOverall = totalCandidate ? (totalOverallSubtotal / totalCandidate) : 0;
   const perCandidateOps = totalCandidate ? (totalSubtotalOps / totalCandidate) : 0;
-  // Per Camera/OP/Guard (Overall/Ops) = SUM(Overall Subtotal or Subtotal Ops) / SUM(Centre Count)
-  // (Centre Count is used as the numeric proxy for camera/OP/guard units, same as the
-  // per-row calculation this mirrors.)
   const perCameraOverall = totalCentreCount ? (totalOverallSubtotal / totalCentreCount) : 0;
   const perCameraOps = totalCentreCount ? (totalSubtotalOps / totalCentreCount) : 0;
 
@@ -2025,16 +1908,6 @@ function renderSubtotalKPIs(rows){
   });
 }
 
-// renderSubtotalTable: shows Total Candidate / Op-Guard-Cam-VOIP / Overall
-// Subtotal / Subtotal (Ops) / Per Candidate Subtotal (Overall & Ops) / Per
-// Camera-OP-Guard Subtotal (Overall & Ops), either one row per project
-// ("Project-wise" - each project's own already-correct rate, straight from
-// the data) or aggregated per client ("Client-wise" - Total Candidate /
-// Centre Count / Overall Subtotal / Subtotal (Ops) are summed across the
-// client's projects first, and ONLY THEN are the 4 "per unit" rate columns
-// computed as sum(numerator)/sum(denominator) - never as a mean of the
-// per-project rates. The Op/Guard field is a combined text cell per project
-// so it's shown as an entry count).
 function renderSubtotalTable(rows){
   const thead = document.getElementById('subtotalTableHead');
   const tbody = document.querySelector('#subtotalTable tbody');
@@ -2064,10 +1937,6 @@ function renderSubtotalTable(rows){
       g.Projects += 1;
       if (r.opGuardData) g.opGuardCount += 1;
     });
-    // Client-level "per unit" rates = SUM(Overall Subtotal / Subtotal Ops) / SUM(Total
-    // Candidate / Centre Count) for that client - a subtotal-then-divide, matching
-    // exactly how the Excel/Sheets version would roll these up. This replaces the old
-    // (incorrect) approach of averaging each project's own per-unit rate.
     const agg = Array.from(map.entries()).map(([key,g])=>({
       key, ...g,
       PerCandidateSubtotalOverall: g.TotalCandidate ? (g.OverallSubtotal / g.TotalCandidate) : 0,
@@ -2099,7 +1968,6 @@ document.querySelectorAll('input[name="subtotalView"]').forEach(radio=>{
   });
 });
 
-// ---- initial page load ----
 buildFilterBar();
 buildProjColsPanel();
 document.getElementById('periodLabel').textContent = '__PERIOD_LABEL__';
