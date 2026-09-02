@@ -38,6 +38,7 @@
   }
   .topbar h1 span{color:var(--gold);}
   .topbar .sub{color:var(--muted); font-size:12.5px; margin-top:4px;}
+  .topbar-right{display:flex; align-items:center; gap:14px; flex-wrap:wrap;}
   .kpis{
     display:grid; grid-template-columns:repeat(5,1fr); gap:14px; margin-bottom:22px;
   }
@@ -75,6 +76,31 @@
     border-radius:6px; padding:5px 10px; font-size:11.5px; cursor:pointer; font-family:inherit;
   }
   .clear-btn:hover{color:var(--coral); border-color:var(--coral);}
+
+  /* ---- Theme picker ---- */
+  .theme-picker{position:relative;}
+  .theme-btn{
+    display:flex; align-items:center; gap:7px;
+    background:var(--panel-2); color:var(--text); border:1px solid var(--border);
+    border-radius:6px; padding:7px 12px; font-size:12.5px; cursor:pointer; font-family:inherit;
+  }
+  .theme-btn:hover{border-color:var(--gold);}
+  .theme-btn .dot{width:10px; height:10px; border-radius:50%; background:var(--gold); box-shadow:0 0 5px var(--gold);}
+  .theme-panel{
+    display:none; position:absolute; top:calc(100% + 6px); right:0; z-index:30;
+    background:var(--panel-2); border:1px solid var(--border); border-radius:8px;
+    width:190px; padding:8px; box-shadow:0 8px 24px rgba(0,0,0,0.45);
+  }
+  .theme-panel.open{display:block;}
+  .theme-option{
+    display:flex; align-items:center; gap:9px; font-size:12.5px; padding:7px 8px;
+    border-radius:6px; cursor:pointer; color:var(--text);
+  }
+  .theme-option:hover{background:rgba(255,255,255,0.05);}
+  .theme-option.selected{background:rgba(217,164,65,0.15); color:var(--gold); font-weight:600;}
+  .theme-option .swatch{
+    width:16px; height:16px; border-radius:50%; border:1px solid rgba(255,255,255,0.15); flex:none;
+  }
 
   /* ---- Multi-select filter dropdown ---- */
   .multiselect{position:relative; min-width:170px; margin-bottom:10px;}
@@ -193,7 +219,13 @@
       <h1>Margin<span>.</span>Dashboard</h1>
       <div class="sub"><span class="live-dot"></span>Exam Center Ops · Revenue &amp; Margin Overview (Live)</div>
     </div>
-    <div class="sub" id="periodLabel"></div>
+    <div class="topbar-right">
+      <div class="sub" id="periodLabel"></div>
+      <div class="theme-picker">
+        <button type="button" class="theme-btn" id="themeBtn"><span class="dot" id="themeDot"></span><span id="themeBtnLabel">Theme</span></button>
+        <div class="theme-panel" id="themePanel"></div>
+      </div>
+    </div>
   </div>
 
   <div class="filter-bar-wrap">
@@ -754,6 +786,7 @@ function applyMultiSelect(key, listEl, btn){
 // close any open dropdown when clicking elsewhere on the page
 document.addEventListener('click', () => {
   document.querySelectorAll('.ms-panel.open').forEach(p => p.classList.remove('open'));
+  document.querySelectorAll('.theme-panel.open').forEach(p => p.classList.remove('open'));
 });
 
 // "Clear all" button: resets every filter's Set + unticks every checkbox + resets every button label
@@ -1967,6 +2000,85 @@ document.querySelectorAll('input[name="subtotalView"]').forEach(radio=>{
     }
   });
 });
+
+// ---------------- Theme system ----------------
+// THEMES: each theme swaps the CSS custom properties that drive the whole
+// page's colors (background/panel/border/text/muted/grid) plus the accent
+// colors (gold/teal/coral/violet) used both in CSS and by Chart.js.
+const THEMES = {
+  dark:    { name:'Dark (Default)',  bg:'#0b1220', panel:'#121b2e', panel2:'#17233a', border:'#223252', text:'#e7ecf5', muted:'#8ea0c2', gold:'#d9a441', teal:'#33b8a8', coral:'#e0665f', violet:'#8b7ee8', grid:'rgba(255,255,255,0.06)', swatch:'#0b1220' },
+  midnight:{ name:'Midnight Blue',   bg:'#03060d', panel:'#0b1424', panel2:'#101d34', border:'#1c2b47', text:'#dbe6ff', muted:'#6f83ab', gold:'#e0b45a', teal:'#3fd0c0', coral:'#ef6f68', violet:'#9d8ff2', grid:'rgba(255,255,255,0.05)', swatch:'#0b1a33' },
+  forest:  { name:'Forest Green',    bg:'#0b120e', panel:'#121f18', panel2:'#182a21', border:'#25402f', text:'#e6f2ea', muted:'#83a692', gold:'#d9a441', teal:'#4fbf8b', coral:'#e0665f', violet:'#8b7ee8', grid:'rgba(255,255,255,0.06)', swatch:'#163523' },
+  sunset:  { name:'Sunset Warm',     bg:'#1a1210', panel:'#241a17', panel2:'#2e211c', border:'#4a332a', text:'#f5e9e2', muted:'#c79b83', gold:'#e0a441', teal:'#4fb6ac', coral:'#e0665f', violet:'#c98be0', grid:'rgba(255,255,255,0.06)', swatch:'#7a3b23' },
+  light:   { name:'Light',           bg:'#f4f6fb', panel:'#ffffff', panel2:'#eef1f8', border:'#d7deea', text:'#1b2434', muted:'#5b6b85', gold:'#b9791f', teal:'#128a7d', coral:'#c23f38', violet:'#6a5acd', grid:'rgba(0,0,0,0.07)', swatch:'#f4f6fb' },
+};
+const THEME_ORDER = ['dark','midnight','forest','sunset','light'];
+const THEME_STORAGE_KEY = 'marginDashboardTheme';
+
+function applyTheme(name, skipRerender){
+  const t = THEMES[name] || THEMES.dark;
+  const root = document.documentElement.style;
+  root.setProperty('--bg', t.bg);
+  root.setProperty('--panel', t.panel);
+  root.setProperty('--panel-2', t.panel2);
+  root.setProperty('--border', t.border);
+  root.setProperty('--text', t.text);
+  root.setProperty('--muted', t.muted);
+  root.setProperty('--gold', t.gold);
+  root.setProperty('--teal', t.teal);
+  root.setProperty('--coral', t.coral);
+  root.setProperty('--violet', t.violet);
+  root.setProperty('--grid', t.grid);
+
+  // keep Chart.js text/gridline colors in sync with the chosen theme
+  Chart.defaults.color = t.muted;
+  Chart.defaults.borderColor = t.grid;
+
+  const dot = document.getElementById('themeDot');
+  const label = document.getElementById('themeBtnLabel');
+  if (dot) { dot.style.background = t.gold; dot.style.boxShadow = '0 0 5px ' + t.gold; }
+  if (label) label.textContent = t.name;
+
+  document.querySelectorAll('.theme-option').forEach(el=>{
+    el.classList.toggle('selected', el.dataset.theme === name);
+  });
+
+  try { localStorage.setItem(THEME_STORAGE_KEY, name); } catch(e) {}
+
+  if (!skipRerender){
+    const active = document.querySelector('.tabpage.active');
+    renderTab(active ? active.id : 'tab-overview');
+  }
+}
+
+function buildThemePanel(){
+  const panel = document.getElementById('themePanel');
+  panel.innerHTML = '';
+  THEME_ORDER.forEach(key=>{
+    const t = THEMES[key];
+    const row = document.createElement('div');
+    row.className = 'theme-option';
+    row.dataset.theme = key;
+    row.innerHTML = `<span class="swatch" style="background:${t.swatch}"></span><span>${t.name}</span>`;
+    row.addEventListener('click', ()=>{
+      applyTheme(key);
+      document.getElementById('themePanel').classList.remove('open');
+    });
+    panel.appendChild(row);
+  });
+}
+
+document.getElementById('themeBtn').addEventListener('click', (e)=>{
+  e.stopPropagation();
+  document.querySelectorAll('.ms-panel.open').forEach(p=>p.classList.remove('open'));
+  document.getElementById('themePanel').classList.toggle('open');
+});
+document.getElementById('themePanel').addEventListener('click', e=>e.stopPropagation());
+
+buildThemePanel();
+let savedTheme = 'dark';
+try { savedTheme = localStorage.getItem(THEME_STORAGE_KEY) || 'dark'; } catch(e) {}
+applyTheme(savedTheme, true);
 
 buildFilterBar();
 buildProjColsPanel();
