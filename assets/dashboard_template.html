@@ -909,7 +909,7 @@ function renderKPIs(){
   const items = [
     {label:'Total Revenue', value: fmtCr(totalRevenue), delta:''},
     {label:'Total Projects', value: fmtNum(totalProjects), delta:''},
-    {label:'Avg Margin %', value: avgMargin.toFixed(1)+'%', delta: avgMargin>60?'healthy':'watch', cls: avgMargin>60?'up':'down'},
+    {label:'Avg Margin %', value: Math.round(avgMargin)+'%', delta: avgMargin>60?'healthy':'watch', cls: avgMargin>60?'up':'down'},
     {label:'Active Projects', value: fmtNum(activeCount), delta:''},
     {label:'Invoices Pending', value: fmtNum(pendingCount), delta:'needs follow-up', cls:'down'}
   ];
@@ -948,8 +948,8 @@ function renderTrend(){
       plugins:{
         legend:{position:'bottom', labels:{boxWidth:12}},
         datalabels:{
-          display:true, clip:true, color:'#e7ecf5', font:{size:10, weight:'600'}, anchor:'end', align:'top',
-          formatter:(v, ctx)=> ctx.dataset.type==='line' ? v.toFixed(1)+'%' : v
+          display:true, clip:true, color: currentDatalabelColor, font:{size:10, weight:'600'}, anchor:'end', align:'top',
+          formatter:(v, ctx)=> ctx.dataset.type==='line' ? Math.round(v)+'%' : v
         }
       },
       onClick:(evt, elements)=>{ if(elements.length) drillFilter('month', labels[elements[0].index]); }
@@ -973,7 +973,7 @@ function renderStatus(){
       responsive:true, maintainAspectRatio:false,
       plugins:{
         legend:{position:'bottom'},
-        datalabels:{ display:true, color:'#fff', font:{size:11, weight:'700'}, formatter:(v)=> v }
+        datalabels:{ display:true, color: currentDatalabelColor, font:{size:11, weight:'700'}, formatter:(v)=> v }
       },
       onClick:(evt, elements)=>{ if(elements.length) drillFilter('projectStatus', labels[elements[0].index]); }
     }
@@ -999,7 +999,7 @@ function renderClient(){
       indexAxis:'y', responsive:true, maintainAspectRatio:false,
       plugins:{
         legend:{display:false},
-        datalabels:{ display:true, clip:true, color:'#e7ecf5', font:{size:10, weight:'600'}, anchor:'end', align:'right', formatter:(v)=> v }
+        datalabels:{ display:true, clip:true, color: currentDatalabelColor, font:{size:10, weight:'600'}, anchor:'end', align:'right', formatter:(v)=> v }
       },
       scales:{x:{title:{display:true, text:'₹ Cr'}}},
       onClick:(evt, elements)=>{ if(elements.length) drillFilter('client', rawKeys[elements[0].index]); }
@@ -1026,7 +1026,7 @@ function renderService(){
       plugins:{
         legend:{display:false},
         tooltip:{callbacks:{title:(items)=> items.length ? rawKeys[items[0].dataIndex] : ''}},
-        datalabels:{ display:true, clip:true, color:'#e7ecf5', font:{size:10, weight:'600'}, anchor:'end', align:'top', formatter:(v)=> v.toFixed(1)+'%' }
+        datalabels:{ display:true, clip:true, color: currentDatalabelColor, font:{size:10, weight:'600'}, anchor:'end', align:'top', formatter:(v)=> Math.round(v)+'%' }
       },
       scales:{
         x:{ticks:{autoSkip:false, maxRotation:60, minRotation:45, font:{size:10}}},
@@ -1047,7 +1047,7 @@ function renderScatter(){
     data:{ datasets:[{label:'Projects', data: points, backgroundColor:'rgba(139,126,232,0.55)', borderColor:'rgba(139,126,232,0.9)'}] },
     options:{
       responsive:true, maintainAspectRatio:false,
-      plugins:{legend:{display:false}, tooltip:{callbacks:{label: (c)=> 'Revenue ₹'+(c.raw.x).toFixed(1)+'L, Margin '+c.raw.y.toFixed(1)+'%'}}},
+      plugins:{legend:{display:false}, tooltip:{callbacks:{label: (c)=> 'Revenue ₹'+(c.raw.x).toFixed(1)+'L, Margin '+Math.round(c.raw.y)+'%'}}},
       scales:{
         x:{title:{display:true, text:'Revenue (₹ Lakh)'}},
         y:{title:{display:true, text:'Margin %'}}
@@ -1072,7 +1072,7 @@ function renderInvoice(){
       responsive:true, maintainAspectRatio:false,
       plugins:{
         legend:{position:'bottom'},
-        datalabels:{ display:true, color:'#fff', font:{size:11, weight:'700'}, formatter:(v)=> v }
+        datalabels:{ display:true, color: currentDatalabelColor, font:{size:11, weight:'700'}, formatter:(v)=> v }
       },
       onClick:(evt, elements)=>{ if(elements.length) drillFilter('reviewInvoice', labels[elements[0].index]); }
     }
@@ -1090,7 +1090,7 @@ function renderTable(){
   agg.forEach(c=>{
     const tr = document.createElement('tr');
     const pillClass = c.MarginPct >= 60 ? 'good' : (c.MarginPct >=0 ? 'mid':'bad');
-    tr.innerHTML = `<td>${c.key}</td><td class="num">${c.Projects}</td><td class="num">${fmtCr(c.Revenue)}</td><td class="num">${fmtCr(c.Margin)}</td><td class="num"><span class="pill ${pillClass}">${c.MarginPct.toFixed(1)}%</span></td>`;
+    tr.innerHTML = `<td>${c.key}</td><td class="num">${c.Projects}</td><td class="num">${fmtCr(c.Revenue)}</td><td class="num">${fmtCr(c.Margin)}</td><td class="num"><span class="pill ${pillClass}">${Math.round(c.MarginPct)}%</span></td>`;
     tbody.appendChild(tr);
   });
   document.getElementById('clientTableTag').textContent = (n === Infinity ? agg.length + ' clients' : agg.length + ' of ' + fullCount + ' clients (top ' + n + ')');
@@ -1151,7 +1151,7 @@ function renderMonthlyKPIs(agg){
     {label:'Months in View', value: fmtNum(agg.length)},
     {label:'Best Margin % Month', value: bestMonth ? bestMonth.key : '-'},
     {label:'Projected Next Month Revenue', value: projRevenue===null ? '-' : fmtCr(projRevenue), delta:'trend-based estimate', cls:''},
-    {label:'Projected Next Month Margin %', value: projMarginPct===null ? '-' : projMarginPct.toFixed(1)+'%', delta:'avg of last 3 months', cls:''},
+    {label:'Projected Next Month Margin %', value: projMarginPct===null ? '-' : Math.round(projMarginPct)+'%', delta:'avg of last 3 months', cls:''},
   ];
   items.forEach(it=>{
     const div = document.createElement('div'); div.className='kpi';
@@ -1184,8 +1184,8 @@ function renderMonthlyChart(agg){
       plugins:{
         legend:{position:'bottom', labels:{boxWidth:12}},
         datalabels:{
-          display:true, clip:true, color:'#e7ecf5', font:{size:10, weight:'600'}, anchor:'end', align:'top',
-          formatter:(v, ctx)=> ctx.dataset.type==='line' ? v.toFixed(1)+'%' : v
+          display:true, clip:true, color: currentDatalabelColor, font:{size:10, weight:'600'}, anchor:'end', align:'top',
+          formatter:(v, ctx)=> ctx.dataset.type==='line' ? Math.round(v)+'%' : v
         }
       },
       onClick:(evt, elements)=>{ if(elements.length) drillFilter('month', labels[elements[0].index]); }
@@ -1202,9 +1202,9 @@ function renderMonthlyTable(agg){
     const prev = i>0 ? agg[i-1] : null;
     const revDelta = (prev && prev.Revenue) ? ((m.Revenue-prev.Revenue)/Math.abs(prev.Revenue)*100) : null;
     const mpDelta = prev ? (m.MarginPct - prev.MarginPct) : null;
-    const revDeltaHtml = revDelta===null ? '-' : `<span class="${revDelta>=0?'up':'down'}">${revDelta>=0?'+':''}${revDelta.toFixed(1)}%</span>`;
-    const mpDeltaHtml = mpDelta===null ? '-' : `<span class="${mpDelta>=0?'up':'down'}">${mpDelta>=0?'+':''}${mpDelta.toFixed(1)} pts</span>`;
-    tr.innerHTML = `<td>${m.key}</td><td class="num">${fmtCr(m.Revenue)}</td><td class="num">${fmtCr(m.Margin)}</td><td class="num"><span class="pill ${pillClass}">${m.MarginPct.toFixed(1)}%</span></td><td class="num">${fmtNum(m.Projects)}</td><td class="num">${revDeltaHtml}</td><td class="num">${mpDeltaHtml}</td>`;
+    const revDeltaHtml = revDelta===null ? '-' : `<span class="${revDelta>=0?'up':'down'}">${revDelta>=0?'+':''}${Math.round(revDelta)}%</span>`;
+    const mpDeltaHtml = mpDelta===null ? '-' : `<span class="${mpDelta>=0?'up':'down'}">${mpDelta>=0?'+':''}${Math.round(mpDelta)} pts</span>`;
+    tr.innerHTML = `<td>${m.key}</td><td class="num">${fmtCr(m.Revenue)}</td><td class="num">${fmtCr(m.Margin)}</td><td class="num"><span class="pill ${pillClass}">${Math.round(m.MarginPct)}%</span></td><td class="num">${fmtNum(m.Projects)}</td><td class="num">${revDeltaHtml}</td><td class="num">${mpDeltaHtml}</td>`;
     tbody.appendChild(tr);
   });
   document.getElementById('monthlyTableTag').textContent = agg.length + ' months';
@@ -1233,7 +1233,7 @@ function renderClientsKPIs(agg){
     {label:'Total Clients', value: fmtNum(agg.length)},
     {label:'Total Revenue', value: fmtCr(totalRevenue)},
     {label:'Total Margin', value: fmtCr(totalMargin)},
-    {label:'Blended Margin % (overall)', value: blendedMarginPct.toFixed(1)+'%'},
+    {label:'Blended Margin % (overall)', value: Math.round(blendedMarginPct)+'%'},
   ];
   items.forEach(it=>{
     const div = document.createElement('div'); div.className='kpi';
@@ -1258,7 +1258,7 @@ function renderClientAnalysisChart(agg){
       indexAxis:'y', responsive:true, maintainAspectRatio:false,
       plugins:{
         legend:{display:false},
-        datalabels:{ display:true, clip:true, color:'#e7ecf5', font:{size:10, weight:'600'}, anchor:'end', align:'right', formatter:(v)=> v }
+        datalabels:{ display:true, clip:true, color: currentDatalabelColor, font:{size:10, weight:'600'}, anchor:'end', align:'right', formatter:(v)=> v }
       },
       scales:{x:{title:{display:true, text:'₹ Cr'}}},
       onClick:(evt, elements)=>{ if(elements.length) drillFilter('client', rawKeys[elements[0].index]); }
@@ -1277,7 +1277,7 @@ function renderClientAnalysisTable(agg){
   filtered.forEach(c=>{
     const tr = document.createElement('tr');
     const pillClass = c.MarginPct >= 60 ? 'good' : (c.MarginPct >=0 ? 'mid':'bad');
-    tr.innerHTML = `<td>${c.key}</td><td class="num">${fmtCr(c.Revenue)}</td><td class="num">${fmtCr(c.Margin)}</td><td class="num"><span class="pill ${pillClass}">${c.MarginPct.toFixed(1)}%</span></td><td class="num">${fmtNum(c.Projects)}</td>`;
+    tr.innerHTML = `<td>${c.key}</td><td class="num">${fmtCr(c.Revenue)}</td><td class="num">${fmtCr(c.Margin)}</td><td class="num"><span class="pill ${pillClass}">${Math.round(c.MarginPct)}%</span></td><td class="num">${fmtNum(c.Projects)}</td>`;
     tbody.appendChild(tr);
   });
   document.getElementById('clientAnalysisTableTag').textContent = filtered.length + ' of ' + fullCount + ' clients';
@@ -1345,7 +1345,7 @@ function renderServiceAnalysisChart(agg){
       layout:{padding:{top:18}},
       plugins:{
         legend:{position:'bottom'},
-        datalabels:{ display:true, clip:true, color:'#e7ecf5', font:{size:10, weight:'600'}, anchor:'end', align:'top', formatter:(v)=> v }
+        datalabels:{ display:true, clip:true, color: currentDatalabelColor, font:{size:10, weight:'600'}, anchor:'end', align:'top', formatter:(v)=> v }
       },
       scales:{
         x:{ticks:{autoSkip:false, maxRotation:45, minRotation:30}},
@@ -1362,7 +1362,7 @@ function renderServiceAnalysisTable(agg){
   agg.forEach(s=>{
     const tr = document.createElement('tr');
     const pillClass = s.MarginPct >= 60 ? 'good' : (s.MarginPct >=0 ? 'mid':'bad');
-    tr.innerHTML = `<td>${s.key}</td><td class="num">${fmtCr(s.Revenue)}</td><td class="num">${fmtCr(s.Margin)}</td><td class="num"><span class="pill ${pillClass}">${s.MarginPct.toFixed(1)}%</span></td><td class="num">${fmtNum(s.Projects)}</td>`;
+    tr.innerHTML = `<td>${s.key}</td><td class="num">${fmtCr(s.Revenue)}</td><td class="num">${fmtCr(s.Margin)}</td><td class="num"><span class="pill ${pillClass}">${Math.round(s.MarginPct)}%</span></td><td class="num">${fmtNum(s.Projects)}</td>`;
     tbody.appendChild(tr);
   });
   document.getElementById('serviceAnalysisTableTag').textContent = agg.length + ' services';
@@ -1390,7 +1390,7 @@ function renderStatusChart(chartId, canvasId, agg, filterKey){
       responsive:true, maintainAspectRatio:false,
       plugins:{
         legend:{position:'bottom'},
-        datalabels:{ display:true, color:'#fff', font:{size:11, weight:'700'}, formatter:(v)=> v }
+        datalabels:{ display:true, color: currentDatalabelColor, font:{size:11, weight:'700'}, formatter:(v)=> v }
       },
       onClick:(evt, elements)=>{ if(elements.length && filterKey) drillFilter(filterKey, labels[elements[0].index]); }
     }
@@ -1437,8 +1437,8 @@ function renderQuarterKPIs(agg){
     {label:'Total Margin', value: fmtCr(totalMargin)},
     {label:'Quarters in View', value: fmtNum(agg.length)},
     {label:'Best Margin % Quarter', value: bestQ ? bestQ.key : '-'},
-    {label:'Latest QoQ Revenue Growth', value: qoqRev===null?'-':(qoqRev>=0?'+':'')+qoqRev.toFixed(1)+'%', cls: qoqRev===null?'':(qoqRev>=0?'up':'down')},
-    {label:'Latest QoQ Margin % Change', value: qoqMp===null?'-':(qoqMp>=0?'+':'')+qoqMp.toFixed(1)+' pts', cls: qoqMp===null?'':(qoqMp>=0?'up':'down')},
+    {label:'Latest QoQ Revenue Growth', value: qoqRev===null?'-':(qoqRev>=0?'+':'')+Math.round(qoqRev)+'%', cls: qoqRev===null?'':(qoqRev>=0?'up':'down')},
+    {label:'Latest QoQ Margin % Change', value: qoqMp===null?'-':(qoqMp>=0?'+':'')+Math.round(qoqMp)+' pts', cls: qoqMp===null?'':(qoqMp>=0?'up':'down')},
   ];
   items.forEach(it=>{
     const div = document.createElement('div'); div.className='kpi';
@@ -1471,8 +1471,8 @@ function renderQuarterChart(agg){
       plugins:{
         legend:{position:'bottom', labels:{boxWidth:12}},
         datalabels:{
-          display:true, clip:true, color:'#e7ecf5', font:{size:10, weight:'600'}, anchor:'end', align:'top',
-          formatter:(v, ctx)=> ctx.dataset.type==='line' ? v.toFixed(1)+'%' : v
+          display:true, clip:true, color: currentDatalabelColor, font:{size:10, weight:'600'}, anchor:'end', align:'top',
+          formatter:(v, ctx)=> ctx.dataset.type==='line' ? Math.round(v)+'%' : v
         }
       },
       onClick:(evt, elements)=>{ if(elements.length) drillFilter('quarter', labels[elements[0].index]); }
@@ -1489,9 +1489,9 @@ function renderQuarterTable(agg){
     const prev = i>0 ? agg[i-1] : null;
     const revDelta = (prev && prev.Revenue) ? ((q.Revenue-prev.Revenue)/Math.abs(prev.Revenue)*100) : null;
     const mpDelta = prev ? (q.MarginPct - prev.MarginPct) : null;
-    const revDeltaHtml = revDelta===null ? '-' : `<span class="${revDelta>=0?'up':'down'}">${revDelta>=0?'+':''}${revDelta.toFixed(1)}%</span>`;
-    const mpDeltaHtml = mpDelta===null ? '-' : `<span class="${mpDelta>=0?'up':'down'}">${mpDelta>=0?'+':''}${mpDelta.toFixed(1)} pts</span>`;
-    tr.innerHTML = `<td>${q.key}</td><td class="num">${fmtCr(q.Revenue)}</td><td class="num">${fmtCr(q.Margin)}</td><td class="num"><span class="pill ${pillClass}">${q.MarginPct.toFixed(1)}%</span></td><td class="num">${fmtNum(q.Projects)}</td><td class="num">${revDeltaHtml}</td><td class="num">${mpDeltaHtml}</td>`;
+    const revDeltaHtml = revDelta===null ? '-' : `<span class="${revDelta>=0?'up':'down'}">${revDelta>=0?'+':''}${Math.round(revDelta)}%</span>`;
+    const mpDeltaHtml = mpDelta===null ? '-' : `<span class="${mpDelta>=0?'up':'down'}">${mpDelta>=0?'+':''}${Math.round(mpDelta)} pts</span>`;
+    tr.innerHTML = `<td>${q.key}</td><td class="num">${fmtCr(q.Revenue)}</td><td class="num">${fmtCr(q.Margin)}</td><td class="num"><span class="pill ${pillClass}">${Math.round(q.MarginPct)}%</span></td><td class="num">${fmtNum(q.Projects)}</td><td class="num">${revDeltaHtml}</td><td class="num">${mpDeltaHtml}</td>`;
     tbody.appendChild(tr);
   });
   document.getElementById('quarterTableTag').textContent = agg.length + ' quarters';
@@ -1621,8 +1621,8 @@ function renderComparisonTab(){
       {label:'Groups Selected', value: fmtNum(groups.length)},
       {label:'Combined Revenue', value: fmtCr(totalRevenue)},
       {label:'Combined Margin', value: fmtCr(totalMargin)},
-      {label:'Best Margin %', value: best ? `${best.key} (${best.MarginPct.toFixed(1)}%)` : '-'},
-      {label:'Weakest Margin %', value: worst ? `${worst.key} (${worst.MarginPct.toFixed(1)}%)` : '-'},
+      {label:'Best Margin %', value: best ? `${best.key} (${Math.round(best.MarginPct)}%)` : '-'},
+      {label:'Weakest Margin %', value: worst ? `${worst.key} (${Math.round(worst.MarginPct)}%)` : '-'},
     ];
     items.forEach(it=>{
       const div = document.createElement('div'); div.className='kpi';
@@ -1639,7 +1639,7 @@ function renderComparisonTab(){
       labels:['Revenue (₹ Cr)','Margin (₹ Cr)','Margin %','Projects'],
       datasets: groups.map((g,i)=>({
         label: g.key,
-        data: [+(g.Revenue/1e7).toFixed(2), +(g.Margin/1e7).toFixed(2), +g.MarginPct.toFixed(1), g.Projects],
+        data: [+(g.Revenue/1e7).toFixed(2), +(g.Margin/1e7).toFixed(2), +Math.round(g.MarginPct), g.Projects],
         backgroundColor: PALETTE[i % PALETTE.length],
         borderRadius:5
       }))
@@ -1649,7 +1649,7 @@ function renderComparisonTab(){
       layout:{padding:{top:18}},
       plugins:{
         legend:{position:'bottom'},
-        datalabels:{ display:true, clip:true, color:'#e7ecf5', font:{size:9, weight:'600'}, anchor:'end', align:'top', formatter:(v)=> v }
+        datalabels:{ display:true, clip:true, color: currentDatalabelColor, font:{size:9, weight:'600'}, anchor:'end', align:'top', formatter:(v)=> v }
       }
     }
   });
@@ -1664,12 +1664,12 @@ function renderComparisonTab(){
       revDeltaHtml = '<span class="delta">baseline</span>';
     } else if (baseline){
       const revDelta = baseline.Revenue ? ((g.Revenue-baseline.Revenue)/Math.abs(baseline.Revenue)*100) : null;
-      revDeltaHtml = revDelta===null ? '-' : `<span class="${revDelta>=0?'up':'down'}">${revDelta>=0?'+':''}${revDelta.toFixed(1)}%</span>`;
+      revDeltaHtml = revDelta===null ? '-' : `<span class="${revDelta>=0?'up':'down'}">${revDelta>=0?'+':''}${Math.round(revDelta)}%</span>`;
     }
     const mpDelta = (baseline && i>0) ? (g.MarginPct - baseline.MarginPct) : null;
-    mpDeltaHtml = mpDelta===null ? (i===0 ? '-' : '-') : `<span class="${mpDelta>=0?'up':'down'}">${mpDelta>=0?'+':''}${mpDelta.toFixed(1)} pts</span>`;
+    mpDeltaHtml = mpDelta===null ? (i===0 ? '-' : '-') : `<span class="${mpDelta>=0?'up':'down'}">${mpDelta>=0?'+':''}${Math.round(mpDelta)} pts</span>`;
     const pillClass = g.MarginPct >= 60 ? 'good' : (g.MarginPct >=0 ? 'mid':'bad');
-    tr.innerHTML = `<td>${g.key}</td><td class="num">${fmtCr(g.Revenue)}</td><td class="num">${revDeltaHtml}</td><td class="num">${fmtCr(g.Margin)}</td><td class="num"><span class="pill ${pillClass}">${g.MarginPct.toFixed(1)}%</span></td><td class="num">${mpDeltaHtml}</td><td class="num">${fmtNum(g.Projects)}</td>`;
+    tr.innerHTML = `<td>${g.key}</td><td class="num">${fmtCr(g.Revenue)}</td><td class="num">${revDeltaHtml}</td><td class="num">${fmtCr(g.Margin)}</td><td class="num"><span class="pill ${pillClass}">${Math.round(g.MarginPct)}%</span></td><td class="num">${mpDeltaHtml}</td><td class="num">${fmtNum(g.Projects)}</td>`;
     tbody.appendChild(tr);
   });
   document.getElementById('cmpTableTag').textContent = groups.length + ' groups, vs ' + (baseline ? baseline.key : 'first selected');
@@ -1811,7 +1811,7 @@ function renderNegChart(){
       indexAxis:'y', responsive:true, maintainAspectRatio:false,
       plugins:{
         legend:{display:false},
-        datalabels:{ display:true, clip:true, color:'#e7ecf5', font:{size:9, weight:'600'}, anchor:'end', align:'right', formatter:(v)=> fmtCr(v) }
+        datalabels:{ display:true, clip:true, color: currentDatalabelColor, font:{size:9, weight:'600'}, anchor:'end', align:'right', formatter:(v)=> fmtCr(v) }
       },
       scales:{x:{title:{display:true, text:'Margin (₹)'}}, y:{ticks:{autoSkip:false, font:{size:9}}}},
       onClick:(evt, elements)=>{
@@ -1848,7 +1848,7 @@ function renderPosNegChart(){
       responsive:true, maintainAspectRatio:false,
       plugins:{
         legend:{position:'bottom'},
-        datalabels:{ display:true, color:'#fff', font:{size:11, weight:'700'}, formatter:(v)=> v }
+        datalabels:{ display:true, color: currentDatalabelColor, font:{size:11, weight:'700'}, formatter:(v)=> v }
       }
     }
   });
@@ -2014,6 +2014,7 @@ const THEMES = {
 };
 const THEME_ORDER = ['dark','midnight','forest','sunset','light'];
 const THEME_STORAGE_KEY = 'marginDashboardTheme';
+let currentDatalabelColor = THEMES.dark.text;
 
 function applyTheme(name, skipRerender){
   const t = THEMES[name] || THEMES.dark;
@@ -2033,6 +2034,7 @@ function applyTheme(name, skipRerender){
   // keep Chart.js text/gridline colors in sync with the chosen theme
   Chart.defaults.color = t.muted;
   Chart.defaults.borderColor = t.grid;
+  currentDatalabelColor = t.text;
 
   const dot = document.getElementById('themeDot');
   const label = document.getElementById('themeBtnLabel');
