@@ -581,12 +581,12 @@ const fmtCr = v => {
   if (v === null || v === undefined || isNaN(v)) return '-';
   const abs = Math.abs(v);
   if (abs >= 1e7){
-    return '₹' + (v/1e7).toFixed(2) + ' Cr';
+    return '₹' + Math.round(v/1e7) + ' Cr';
   }
   if (abs >= 1e5){
-    return '₹' + (v/1e5).toFixed(2) + ' L';
+    return '₹' + Math.round(v/1e5) + ' L';
   }
-  return '₹' + (v/1e3).toFixed(2) + ' K';
+  return '₹' + Math.round(v/1e3) + ' K';
 };
 // fmtNum: formats a number using Indian digit grouping (e.g. 12,34,567).
 const fmtNum = v => Number(v).toLocaleString('en-IN');
@@ -932,8 +932,8 @@ function renderTrend(){
     data:{
       labels,
       datasets:[
-        {type:'bar', label:'Revenue (Cr)', data: agg.map(m=>+(m.Revenue/1e7).toFixed(2)), backgroundColor:'rgba(79,139,208,0.55)', borderRadius:5, yAxisID:'y'},
-        {type:'bar', label:'Margin (Cr)', data: agg.map(m=>+(m.Margin/1e7).toFixed(2)), backgroundColor:'rgba(217,164,65,0.7)', borderRadius:5, yAxisID:'y'},
+        {type:'bar', label:'Revenue (Cr)', data: agg.map(m=>Math.round(m.Revenue/1e7)), backgroundColor:'rgba(79,139,208,0.55)', borderRadius:5, yAxisID:'y'},
+        {type:'bar', label:'Margin (Cr)', data: agg.map(m=>Math.round(m.Margin/1e7)), backgroundColor:'rgba(217,164,65,0.7)', borderRadius:5, yAxisID:'y'},
         {type:'line', label:'Margin %', data: agg.map(m=>m.MarginPct), borderColor:COLORS.teal, backgroundColor:COLORS.teal, tension:0.35, yAxisID:'y1', pointRadius:4}
       ]
     },
@@ -993,7 +993,7 @@ function renderClient(){
     type:'bar',
     data:{
       labels: top.map(c=>c.key.length>22? c.key.slice(0,20)+'…': c.key),
-      datasets:[{label:'Revenue (Cr)', data: top.map(c=>+(c.Revenue/1e7).toFixed(2)), backgroundColor: PALETTE[4], borderRadius:5}]
+      datasets:[{label:'Revenue (Cr)', data: top.map(c=>Math.round(c.Revenue/1e7)), backgroundColor: PALETTE[4], borderRadius:5}]
     },
     options:{
       indexAxis:'y', responsive:true, maintainAspectRatio:false,
@@ -1047,7 +1047,7 @@ function renderScatter(){
     data:{ datasets:[{label:'Projects', data: points, backgroundColor:'rgba(139,126,232,0.55)', borderColor:'rgba(139,126,232,0.9)'}] },
     options:{
       responsive:true, maintainAspectRatio:false,
-      plugins:{legend:{display:false}, tooltip:{callbacks:{label: (c)=> 'Revenue ₹'+(c.raw.x).toFixed(1)+'L, Margin '+Math.round(c.raw.y)+'%'}}},
+      plugins:{legend:{display:false}, tooltip:{callbacks:{label: (c)=> 'Revenue ₹'+Math.round(c.raw.x)+'L, Margin '+Math.round(c.raw.y)+'%'}}},
       scales:{
         x:{title:{display:true, text:'Revenue (₹ Lakh)'}},
         y:{title:{display:true, text:'Margin %'}}
@@ -1168,8 +1168,8 @@ function renderMonthlyChart(agg){
     data:{
       labels,
       datasets:[
-        {type:'bar', label:'Revenue (Cr)', data: agg.map(m=>+(m.Revenue/1e7).toFixed(2)), backgroundColor:'rgba(79,139,208,0.55)', borderRadius:5, yAxisID:'y'},
-        {type:'bar', label:'Margin (Cr)', data: agg.map(m=>+(m.Margin/1e7).toFixed(2)), backgroundColor:'rgba(217,164,65,0.7)', borderRadius:5, yAxisID:'y'},
+        {type:'bar', label:'Revenue (Cr)', data: agg.map(m=>Math.round(m.Revenue/1e7)), backgroundColor:'rgba(79,139,208,0.55)', borderRadius:5, yAxisID:'y'},
+        {type:'bar', label:'Margin (Cr)', data: agg.map(m=>Math.round(m.Margin/1e7)), backgroundColor:'rgba(217,164,65,0.7)', borderRadius:5, yAxisID:'y'},
         {type:'line', label:'Margin %', data: agg.map(m=>m.MarginPct), borderColor:COLORS.teal, backgroundColor:COLORS.teal, tension:0.35, yAxisID:'y1', pointRadius:4}
       ]
     },
@@ -1252,7 +1252,7 @@ function renderClientAnalysisChart(agg){
     type:'bar',
     data:{
       labels: top.map(c=>c.key.length>26? c.key.slice(0,24)+'…': c.key),
-      datasets:[{label:'Revenue (Cr)', data: top.map(c=>+(c.Revenue/1e7).toFixed(2)), backgroundColor: PALETTE[4], borderRadius:5}]
+      datasets:[{label:'Revenue (Cr)', data: top.map(c=>Math.round(c.Revenue/1e7)), backgroundColor: PALETTE[4], borderRadius:5}]
     },
     options:{
       indexAxis:'y', responsive:true, maintainAspectRatio:false,
@@ -1336,8 +1336,8 @@ function renderServiceAnalysisChart(agg){
     data:{
       labels,
       datasets:[
-        {label:'Revenue (Cr)', data: agg.map(s=>+(s.Revenue/1e7).toFixed(2)), backgroundColor:'rgba(79,139,208,0.55)', borderRadius:5, yAxisID:'y'},
-        {label:'Margin (Cr)', data: agg.map(s=>+(s.Margin/1e7).toFixed(2)), backgroundColor:'rgba(217,164,65,0.7)', borderRadius:5, yAxisID:'y'}
+        {label:'Revenue (Cr)', data: agg.map(s=>Math.round(s.Revenue/1e7)), backgroundColor:'rgba(79,139,208,0.55)', borderRadius:5, yAxisID:'y'},
+        {label:'Margin (Cr)', data: agg.map(s=>Math.round(s.Margin/1e7)), backgroundColor:'rgba(217,164,65,0.7)', borderRadius:5, yAxisID:'y'}
       ]
     },
     options:{
@@ -1455,8 +1455,8 @@ function renderQuarterChart(agg){
     data:{
       labels,
       datasets:[
-        {type:'bar', label:'Revenue (Cr)', data: agg.map(q=>+(q.Revenue/1e7).toFixed(2)), backgroundColor:'rgba(79,139,208,0.55)', borderRadius:5, yAxisID:'y'},
-        {type:'bar', label:'Margin (Cr)', data: agg.map(q=>+(q.Margin/1e7).toFixed(2)), backgroundColor:'rgba(217,164,65,0.7)', borderRadius:5, yAxisID:'y'},
+        {type:'bar', label:'Revenue (Cr)', data: agg.map(q=>Math.round(q.Revenue/1e7)), backgroundColor:'rgba(79,139,208,0.55)', borderRadius:5, yAxisID:'y'},
+        {type:'bar', label:'Margin (Cr)', data: agg.map(q=>Math.round(q.Margin/1e7)), backgroundColor:'rgba(217,164,65,0.7)', borderRadius:5, yAxisID:'y'},
         {type:'line', label:'Margin %', data: agg.map(q=>q.MarginPct), borderColor:COLORS.teal, backgroundColor:COLORS.teal, tension:0.35, yAxisID:'y1', pointRadius:4}
       ]
     },
@@ -1639,7 +1639,7 @@ function renderComparisonTab(){
       labels:['Revenue (₹ Cr)','Margin (₹ Cr)','Margin %','Projects'],
       datasets: groups.map((g,i)=>({
         label: g.key,
-        data: [+(g.Revenue/1e7).toFixed(2), +(g.Margin/1e7).toFixed(2), +Math.round(g.MarginPct), g.Projects],
+        data: [Math.round(g.Revenue/1e7), Math.round(g.Margin/1e7), +Math.round(g.MarginPct), g.Projects],
         backgroundColor: PALETTE[i % PALETTE.length],
         borderRadius:5
       }))
@@ -1701,12 +1701,30 @@ let projSelectedColumns = new Set([
   '_marginStatus'
 ]);
 
+// isMarginOpsPctColumn: matches the "Margin Percentage Based On Overall
+// Subtotal (Ops)" sheet column (column BL) regardless of exact spacing/
+// capitalization, so its raw value can be shown as a rounded percentage.
+function isMarginOpsPctColumn(col){
+  const c = String(col||'').toLowerCase();
+  return c.includes('margin') && c.includes('percentage') && c.includes('overall subtotal') && c.includes('ops');
+}
+
 function colValue(p, col){
   if (col === '_marginStatus'){
     return (p.margin||0) < 0 ? '<span class="badge neg">Negative</span>' : '<span class="badge pos">Positive</span>';
   }
   const v = (p.allColumns && p.allColumns[col] !== undefined) ? p.allColumns[col] : '';
-  return (v === null || v === undefined) ? '' : String(v);
+  if (v === null || v === undefined || v === '') return '';
+  if (isMarginOpsPctColumn(col)){
+    const num = parseFloat(String(v).replace('%','').trim());
+    if (!isNaN(num)){
+      // sheet may store this as a fraction (0.65) or already as a percent (65) -
+      // if it's a small decimal, treat it as a fraction and scale up to %.
+      const pct = Math.abs(num) <= 1 ? num * 100 : num;
+      return Math.round(pct) + '%';
+    }
+  }
+  return String(v);
 }
 
 function buildProjColsPanel(){
