@@ -1716,11 +1716,16 @@ function colValue(p, col){
   const v = (p.allColumns && p.allColumns[col] !== undefined) ? p.allColumns[col] : '';
   if (v === null || v === undefined || v === '') return '';
   if (isMarginOpsPctColumn(col)){
-    const num = parseFloat(String(v).replace('%','').trim());
+    const raw = String(v).trim();
+    const hasPercentSign = raw.includes('%');
+    const num = parseFloat(raw.replace('%','').trim());
     if (!isNaN(num)){
-      // sheet may store this as a fraction (0.65) or already as a percent (65) -
-      // if it's a small decimal, treat it as a fraction and scale up to %.
-      const pct = Math.abs(num) <= 1 ? num * 100 : num;
+      // Google Sheets percent-formatted cells store the underlying value as a
+      // FRACTION (95% is really 0.95, -1122% is really -11.22) - the raw
+      // export from the sheet won't include a '%' sign, so scale it up by
+      // 100 unconditionally in that case. If the source already sent a '%'
+      // sign, it's already a display percent - don't scale it again.
+      const pct = hasPercentSign ? num : num * 100;
       return Math.round(pct) + '%';
     }
   }
