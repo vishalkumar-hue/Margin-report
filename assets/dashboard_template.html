@@ -1701,12 +1701,13 @@ let projSelectedColumns = new Set([
   '_marginStatus'
 ]);
 
-// isMarginOpsPctColumn: matches the "Margin Percentage Based On Overall
-// Subtotal (Ops)" sheet column (column BL) regardless of exact spacing/
-// capitalization, so its raw value can be shown as a rounded percentage.
-function isMarginOpsPctColumn(col){
+// isMarginPctColumn: matches the raw "Margin Percentage Based On Overall
+// Subtotal" columns (both the plain one and the "(Ops)" one, column BL),
+// regardless of exact spacing/capitalization, so their raw values are shown
+// as rounded percentages instead of bare numbers.
+function isMarginPctColumn(col){
   const c = String(col||'').toLowerCase();
-  return c.includes('margin') && c.includes('percentage') && c.includes('overall subtotal') && c.includes('ops');
+  return c.includes('margin') && c.includes('percentage') && c.includes('overall') && c.includes('subtotal');
 }
 
 function colValue(p, col){
@@ -1715,19 +1716,13 @@ function colValue(p, col){
   }
   const v = (p.allColumns && p.allColumns[col] !== undefined) ? p.allColumns[col] : '';
   if (v === null || v === undefined || v === '') return '';
-  if (isMarginOpsPctColumn(col)){
-    const raw = String(v).trim();
-    const hasPercentSign = raw.includes('%');
-    const num = parseFloat(raw.replace('%','').trim());
-    if (!isNaN(num)){
-      // Google Sheets percent-formatted cells store the underlying value as a
-      // FRACTION (95% is really 0.95, -1122% is really -11.22) - the raw
-      // export from the sheet won't include a '%' sign, so scale it up by
-      // 100 unconditionally in that case. If the source already sent a '%'
-      // sign, it's already a display percent - don't scale it again.
-      const pct = hasPercentSign ? num : num * 100;
-      return Math.round(pct) + '%';
-    }
+  if (isMarginPctColumn(col)){
+    // The Streamlit backend reads the sheet's CSV export (where % cells come
+    // through as text like "95%"), then clean_numeric() strips the '%' and
+    // converts it straight to a plain number (95) - it is NOT a fraction, so
+    // no ×100 scaling is needed here, just round it and put the '%' back.
+    const num = parseFloat(String(v).replace('%','').trim());
+    if (!isNaN(num)) return Math.round(num) + '%';
   }
   return String(v);
 }
