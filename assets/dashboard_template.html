@@ -860,7 +860,10 @@ function drillFilter(key, value){
 // group) - never as a simple average of each row's own margin %. Averaging
 // row-level percentages directly would over/under-weight small projects vs
 // big ones (e.g. 10 projects with wildly different revenue but averaging to
-// "15%" doesn't reflect the group's real combined margin). Used for
+// "15%" doesn't reflect the group's real combined margin). Additionally
+// derives the same Per-Candidate / Per-Camera-OP-Guard subtotal rates that
+// the Project-wise and Subtotal Details tabs show, so any grouped view
+// (e.g. Service Analysis) can expose those columns too. Used for
 // client/service/month/quarter charts & tables.
 function aggregateBy(rows, field){
   const map = new Map();
@@ -880,7 +883,13 @@ function aggregateBy(rows, field){
   return Array.from(map.entries()).map(([key, g]) => ({
     key, ...g,
     // Margin % = (sum of Margin Amount Based On Overall Subtotal) / (sum of Revenue) * 100
-    MarginPct: g.Revenue !== 0 ? (g.Margin / g.Revenue * 100) : 0
+    MarginPct: g.Revenue !== 0 ? (g.Margin / g.Revenue * 100) : 0,
+    // Same per-candidate / per-camera-op-guard rate math used by the
+    // Project-wise & Subtotal Details tabs, computed here at group level.
+    PerCandidateSubtotalOverall: g.TotalCandidate ? (g.OverallSubtotal / g.TotalCandidate) : 0,
+    PerCandidateSubtotalOps: g.TotalCandidate ? (g.SubtotalOps / g.TotalCandidate) : 0,
+    PerCameraOpGuardSubtotalOverall: g.CentreCount ? (g.OverallSubtotal / g.CentreCount) : 0,
+    PerCameraOpGuardSubtotalOps: g.CentreCount ? (g.SubtotalOps / g.CentreCount) : 0
   }));
 }
 
@@ -1384,7 +1393,9 @@ function renderServiceAnalysisChart(agg){
 // SERVICE_COLUMN_OPTIONS: the pick-list for the Service Analysis table's
 // "Columns" dropdown (mirrors the same pattern as the All Projects table's
 // column picker, but scoped to the metrics that make sense on an aggregated
-// per-service row rather than raw per-row sheet columns).
+// per-service row rather than raw per-row sheet columns). Includes the same
+// Per Candidate / Per Camera-OP-Guard subtotal rate columns available on the
+// Project-wise / Subtotal Details tabs, now that aggregateBy() computes them.
 const SERVICE_COLUMN_OPTIONS = [
   {key:'Revenue', label:'Revenue', fmt:'cr'},
   {key:'Margin', label:'Margin', fmt:'cr'},
@@ -1395,6 +1406,10 @@ const SERVICE_COLUMN_OPTIONS = [
   {key:'MaxCandidate', label:'Max Candidate', fmt:'num'},
   {key:'OverallSubtotal', label:'Overall Subtotal', fmt:'cr'},
   {key:'SubtotalOps', label:'Subtotal (Ops)', fmt:'cr'},
+  {key:'PerCandidateSubtotalOverall', label:'Per Candidate Subtotal OverlAll', fmt:'num'},
+  {key:'PerCandidateSubtotalOps', label:'Per Candidate Subtotal Ops', fmt:'num'},
+  {key:'PerCameraOpGuardSubtotalOverall', label:'Per Camera/OP/Gaurd Subtotal OverlAll', fmt:'num'},
+  {key:'PerCameraOpGuardSubtotalOps', label:'Per Camera/OP/Gaurd Subtotal Ops', fmt:'num'},
 ];
 const DEFAULT_SERVICE_COLUMNS = ['Revenue','Margin','MarginPct','Projects'];
 let serviceSelectedColumns = new Set(DEFAULT_SERVICE_COLUMNS);
