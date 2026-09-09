@@ -375,9 +375,24 @@
 
   <div class="card">
     <h3>Service Analysis <span class="tag" id="serviceAnalysisTableTag">services</span></h3>
+    <div class="search-row">
+      <div class="multiselect" style="min-width:190px;">
+        <label>Columns</label>
+        <button type="button" class="ms-btn" id="serviceColsBtn">Select columns</button>
+        <div class="ms-panel" id="serviceColsPanel">
+          <input type="text" class="ms-search" id="serviceColsSearch" placeholder="Search columns...">
+          <div class="ms-actions">
+            <button type="button" id="serviceColsAll">All</button>
+            <button type="button" id="serviceColsClear">Clear</button>
+            <button type="button" id="serviceColsDefault">Default</button>
+          </div>
+          <div class="ms-list" id="serviceColsList"></div>
+        </div>
+      </div>
+    </div>
     <div class="scroll-table">
     <table id="serviceAnalysisTable">
-      <thead><tr><th>Service</th><th class="num">Revenue</th><th class="num">Margin</th><th class="num">Margin %</th><th class="num">Projects</th></tr></thead>
+      <thead id="serviceAnalysisTableHead"></thead>
       <tbody></tbody>
     </table>
     </div>
@@ -642,6 +657,7 @@ const FILTER_DEFS = [
   {key:'projectCode', label:'Project Code', field:'projectCode'},
   {key:'examNameDate', label:'Exam Name & Date', field:'examNameDate'},
   {key:'projectStatus', label:'Project Status', field:'projectStatus'},
+  {key:'finalProjectStatus', label:'Final Project Status', field:'finalProjectStatus'},
   {key:'invoiceStatus', label:'Invoice Status', field:'invoiceStatus'},
   {key:'reviewInvoice', label:'Review (Raised/Pending)', field:'reviewInvoice'},
   {key:'billingType', label:'Billing Type', field:'billingType'},
@@ -835,25 +851,34 @@ function drillFilter(key, value){
 }
 
 // ---------------- Client-side aggregation from row-level data ----------------
-// aggregateBy: groups rows by a field and sums Revenue/Margin/Projects,
-// then derives MarginPct per group AS A WEIGHTED RATIO (sum of margin over
-// sum of revenue for that group) - never as a simple average of each row's
-// own margin %. Averaging row-level percentages directly would over/under-
-// weight small projects vs big ones (e.g. 10 projects with wildly different
-// revenue but averaging to "15%" doesn't reflect the group's real combined
-// margin). Used for client/service/month/quarter charts & tables.
+// aggregateBy: groups rows by a field and sums Revenue/Margin/Projects (plus
+// a few extra numeric fields used by the Subtotal tab: TotalCandidate,
+// CentreCount, MaxCandidate, OverallSubtotal, SubtotalOps - carried along so
+// other aggregated views, like the Service Analysis column picker, can show
+// them too without a separate aggregation function), then derives MarginPct
+// per group AS A WEIGHTED RATIO (sum of margin over sum of revenue for that
+// group) - never as a simple average of each row's own margin %. Averaging
+// row-level percentages directly would over/under-weight small projects vs
+// big ones (e.g. 10 projects with wildly different revenue but averaging to
+// "15%" doesn't reflect the group's real combined margin). Used for
+// client/service/month/quarter charts & tables.
 function aggregateBy(rows, field){
   const map = new Map();
   rows.forEach(r => {
     const key = r[field] || '(blank)';
-    if (!map.has(key)) map.set(key, {Revenue:0, Margin:0, Projects:0});
+    if (!map.has(key)) map.set(key, {Revenue:0, Margin:0, Projects:0, TotalCandidate:0, CentreCount:0, MaxCandidate:0, OverallSubtotal:0, SubtotalOps:0});
     const g = map.get(key);
     g.Revenue += (r.revenue || 0);
     g.Margin += (r.margin || 0);
     g.Projects += 1;
+    g.TotalCandidate += (r.totalCandidate || 0);
+    g.CentreCount += (r.centreCount || 0);
+    g.MaxCandidate += (r.maxCandidate || 0);
+    g.OverallSubtotal += (r.overallSubtotal || 0);
+    g.SubtotalOps += (r.subtotalOps || 0);
   });
   return Array.from(map.entries()).map(([key, g]) => ({
-    key, Revenue: g.Revenue, Margin: g.Margin, Projects: g.Projects,
+    key, ...g,
     // Margin % = (sum of Margin Amount Based On Overall Subtotal) / (sum of Revenue) * 100
     MarginPct: g.Revenue !== 0 ? (g.Margin / g.Revenue * 100) : 0
   }));
@@ -1356,13 +1381,122 @@ function renderServiceAnalysisChart(agg){
   });
 }
 
+// SERVICE_COLUMN_OPTIONS: the pick-list for the Service Analysis table's
+// "Columns" dropdown (mirrors the same pattern as the All Projects table's
+// column picker, but scoped to the metrics that make sense on an aggregated
+// per-service row rather than raw per-row sheet columns).
+const SERVICE_COLUMN_OPTIONS = [
+  {key:'Revenue', label:'Revenue', fmt:'cr'},
+  {key:'Margin', label:'Margin', fmt:'cr'},
+  {key:'MarginPct', label:'Margin %', fmt:'pct'},
+  {key:'Projects', label:'Projects', fmt:'num'},
+  {key:'TotalCandidate', label:'Total Candidate', fmt:'num'},
+  {key:'CentreCount', label:'Centre Count', fmt:'num'},
+  {key:'MaxCandidate', label:'Max Candidate', fmt:'num'},
+  {key:'OverallSubtotal', label:'Overall Subtotal', fmt:'cr'},
+  {key:'SubtotalOps', label:'Subtotal (Ops)', fmt:'cr'},
+];
+const DEFAULT_SERVICE_COLUMNS = ['Revenue','Margin','MarginPct','Projects'];
+let serviceSelectedColumns = new Set(DEFAULT_SERVICE_COLUMNS);
+
+// serviceColFormat: renders one aggregated value using the formatting rule
+// declared on its SERVICE_COLUMN_OPTIONS entry (currency, percent pill, or count).
+function serviceColFormat(opt, val){
+  if (opt.fmt === 'cr') return fmtCr(val);
+  if (opt.fmt === 'pct'){
+    const pillClass = val >= 60 ? 'good' : (val >= 0 ? 'mid' : 'bad');
+    return `<span class="pill ${pillClass}">${Math.round(val)}%</span>`;
+  }
+  return fmtNum(Math.round(val||0));
+}
+
+function buildServiceColsPanel(){
+  const listEl = document.getElementById('serviceColsList');
+  listEl.innerHTML = '';
+  SERVICE_COLUMN_OPTIONS.forEach(opt=>{
+    const row = document.createElement('label');
+    row.className = 'ms-option';
+    const cb = document.createElement('input');
+    cb.type = 'checkbox';
+    cb.value = opt.key;
+    cb.checked = serviceSelectedColumns.has(opt.key);
+    const span = document.createElement('span');
+    span.textContent = opt.label;
+    row.appendChild(cb); row.appendChild(span);
+    listEl.appendChild(row);
+  });
+  updateServiceColsBtn();
+}
+
+function updateServiceColsBtn(){
+  const btn = document.getElementById('serviceColsBtn');
+  const n = serviceSelectedColumns.size;
+  btn.textContent = n === 0 ? 'Select columns' : n + ' columns selected';
+  btn.classList.toggle('active', n>0);
+}
+
+document.getElementById('serviceColsBtn').addEventListener('click', (e)=>{
+  e.stopPropagation();
+  document.querySelectorAll('.ms-panel.open').forEach(p=>{ if(p.id!=='serviceColsPanel') p.classList.remove('open'); });
+  document.getElementById('serviceColsPanel').classList.toggle('open');
+});
+document.getElementById('serviceColsPanel').addEventListener('click', e=>e.stopPropagation());
+document.getElementById('serviceColsSearch').addEventListener('input', e=>{
+  const term = e.target.value.toLowerCase();
+  document.querySelectorAll('#serviceColsList .ms-option').forEach(opt=>{
+    opt.style.display = opt.textContent.toLowerCase().includes(term) ? '' : 'none';
+  });
+});
+document.getElementById('serviceColsAll').addEventListener('click', ()=>{
+  document.querySelectorAll('#serviceColsList .ms-option').forEach(opt=>{
+    if (opt.style.display !== 'none') opt.querySelector('input').checked = true;
+  });
+  serviceSelectedColumns = new Set(Array.from(document.querySelectorAll('#serviceColsList input:checked')).map(c=>c.value));
+  updateServiceColsBtn();
+  refreshServiceTable();
+});
+document.getElementById('serviceColsClear').addEventListener('click', ()=>{
+  document.querySelectorAll('#serviceColsList input').forEach(c=>c.checked=false);
+  serviceSelectedColumns = new Set();
+  updateServiceColsBtn();
+  refreshServiceTable();
+});
+document.getElementById('serviceColsDefault').addEventListener('click', ()=>{
+  const defaults = new Set(DEFAULT_SERVICE_COLUMNS);
+  document.querySelectorAll('#serviceColsList input').forEach(c=>{ c.checked = defaults.has(c.value); });
+  serviceSelectedColumns = defaults;
+  updateServiceColsBtn();
+  refreshServiceTable();
+});
+document.getElementById('serviceColsList').addEventListener('change', ()=>{
+  serviceSelectedColumns = new Set(Array.from(document.querySelectorAll('#serviceColsList input:checked')).map(c=>c.value));
+  updateServiceColsBtn();
+  refreshServiceTable();
+});
+
+// refreshServiceTable: re-aggregates from current filters and redraws ONLY
+// the Service Analysis table (used by the column picker so toggling a
+// column doesn't also redraw the KPI cards/chart unnecessarily).
+function refreshServiceTable(){
+  const rows = getFilteredRows();
+  const agg = [...aggregateBy(rows, 'service')].sort((a,b)=>b.Revenue-a.Revenue);
+  renderServiceAnalysisTable(agg);
+}
+
+function renderServiceAnalysisTableHead(){
+  const thead = document.getElementById('serviceAnalysisTableHead');
+  const cols = SERVICE_COLUMN_OPTIONS.filter(opt => serviceSelectedColumns.has(opt.key));
+  thead.innerHTML = '<tr><th>Service</th>' + cols.map(c => `<th class="num">${c.label}</th>`).join('') + '</tr>';
+  return cols;
+}
+
 function renderServiceAnalysisTable(agg){
+  const cols = renderServiceAnalysisTableHead();
   const tbody = document.querySelector('#serviceAnalysisTable tbody');
   tbody.innerHTML = '';
   agg.forEach(s=>{
     const tr = document.createElement('tr');
-    const pillClass = s.MarginPct >= 60 ? 'good' : (s.MarginPct >=0 ? 'mid':'bad');
-    tr.innerHTML = `<td>${s.key}</td><td class="num">${fmtCr(s.Revenue)}</td><td class="num">${fmtCr(s.Margin)}</td><td class="num"><span class="pill ${pillClass}">${Math.round(s.MarginPct)}%</span></td><td class="num">${fmtNum(s.Projects)}</td>`;
+    tr.innerHTML = `<td>${s.key}</td>` + cols.map(c => `<td class="num">${serviceColFormat(c, s[c.key])}</td>`).join('');
     tbody.appendChild(tr);
   });
   document.getElementById('serviceAnalysisTableTag').textContent = agg.length + ' services';
@@ -2102,6 +2236,7 @@ applyTheme(savedTheme, true);
 
 buildFilterBar();
 buildProjColsPanel();
+buildServiceColsPanel();
 document.getElementById('periodLabel').textContent = '__PERIOD_LABEL__';
 renderAll();
 </script>
