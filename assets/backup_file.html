@@ -4,6 +4,7 @@
 <meta charset="UTF-8">
 <title>Margin Dashboard</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/chartjs-plugin-datalabels/2.2.0/chartjs-plugin-datalabels.min.js"></script>
 <style>
   :root{
     --bg: #0b1220;
@@ -37,6 +38,7 @@
   }
   .topbar h1 span{color:var(--gold);}
   .topbar .sub{color:var(--muted); font-size:12.5px; margin-top:4px;}
+  .topbar-right{display:flex; align-items:center; gap:14px; flex-wrap:wrap;}
   .kpis{
     display:grid; grid-template-columns:repeat(5,1fr); gap:14px; margin-bottom:22px;
   }
@@ -49,15 +51,95 @@
   .kpi .delta{font-size:11.5px; margin-top:4px;}
   .up{color:var(--teal);} .down{color:var(--coral);}
   .filters{
-    display:flex; gap:10px; margin-bottom:20px; flex-wrap:wrap; align-items:center;
+    display:flex; gap:10px; margin-bottom:10px; flex-wrap:wrap; align-items:flex-start;
   }
-  .filters label{font-size:11.5px; color:var(--muted); margin-right:6px;}
+  .filters label{font-size:11.5px; color:var(--muted); margin-right:6px; display:block; margin-bottom:4px;}
   select{
     background:var(--panel-2); color:var(--text); border:1px solid var(--border);
-    border-radius:6px; padding:7px 10px; font-size:13px;
+    border-radius:6px; padding:7px 10px; font-size:13px; max-width:220px;
   }
+  .filters input[type=text]{
+    background:var(--panel-2); color:var(--text); border:1px solid var(--border);
+    border-radius:6px; padding:7px 10px; font-size:13px; width:170px;
+  }
+  .filters input[type=text]::placeholder{color:var(--muted); opacity:0.7;}
+  .filter-bar-wrap{
+    border:1px solid var(--border); border-radius:10px; background:var(--panel);
+    padding:14px 16px 6px; margin-bottom:20px;
+  }
+  .filter-bar-head{
+    display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;
+  }
+  .filter-bar-head h4{margin:0; font-size:12.5px; color:var(--muted); text-transform:uppercase; letter-spacing:0.6px;}
+  .clear-btn{
+    background:transparent; border:1px solid var(--border); color:var(--muted);
+    border-radius:6px; padding:5px 10px; font-size:11.5px; cursor:pointer; font-family:inherit;
+  }
+  .clear-btn:hover{color:var(--coral); border-color:var(--coral);}
+
+  /* ---- Theme picker ---- */
+  .theme-picker{position:relative;}
+  .theme-btn{
+    display:flex; align-items:center; gap:7px;
+    background:var(--panel-2); color:var(--text); border:1px solid var(--border);
+    border-radius:6px; padding:7px 12px; font-size:12.5px; cursor:pointer; font-family:inherit;
+  }
+  .theme-btn:hover{border-color:var(--gold);}
+  .theme-btn .dot{width:10px; height:10px; border-radius:50%; background:var(--gold); box-shadow:0 0 5px var(--gold);}
+  .theme-panel{
+    display:none; position:absolute; top:calc(100% + 6px); right:0; z-index:30;
+    background:var(--panel-2); border:1px solid var(--border); border-radius:8px;
+    width:190px; padding:8px; box-shadow:0 8px 24px rgba(0,0,0,0.45);
+  }
+  .theme-panel.open{display:block;}
+  .theme-option{
+    display:flex; align-items:center; gap:9px; font-size:12.5px; padding:7px 8px;
+    border-radius:6px; cursor:pointer; color:var(--text);
+  }
+  .theme-option:hover{background:rgba(255,255,255,0.05);}
+  .theme-option.selected{background:rgba(217,164,65,0.15); color:var(--gold); font-weight:600;}
+  .theme-option .swatch{
+    width:16px; height:16px; border-radius:50%; border:1px solid rgba(255,255,255,0.15); flex:none;
+  }
+
+  /* ---- Multi-select filter dropdown ---- */
+  .multiselect{position:relative; min-width:170px; margin-bottom:10px;}
+  .ms-btn{
+    width:100%; text-align:left; background:var(--panel-2); color:var(--text);
+    border:1px solid var(--border); border-radius:6px; padding:7px 10px; font-size:13px;
+    cursor:pointer; font-family:inherit; position:relative; padding-right:24px;
+  }
+  .ms-btn::after{content:'▾'; position:absolute; right:9px; top:50%; transform:translateY(-50%); color:var(--muted); font-size:10px;}
+  .ms-btn.active{border-color:var(--gold); color:var(--gold);}
+  .ms-panel{
+    display:none; position:absolute; top:calc(100% + 4px); left:0; z-index:20;
+    background:var(--panel-2); border:1px solid var(--border); border-radius:8px;
+    width:230px; max-height:280px; padding:8px; box-shadow:0 8px 24px rgba(0,0,0,0.4);
+  }
+  .ms-panel.open{display:block;}
+  .ms-search{
+    width:100%; background:var(--bg); color:var(--text); border:1px solid var(--border);
+    border-radius:5px; padding:6px 8px; font-size:12.5px; margin-bottom:6px;
+  }
+  .ms-actions{display:flex; gap:8px; margin-bottom:6px; flex-wrap:wrap;}
+  .ms-actions button{
+    flex:1; background:transparent; border:1px solid var(--border); color:var(--muted);
+    border-radius:5px; padding:4px 6px; font-size:11px; cursor:pointer; font-family:inherit;
+    min-width:56px;
+  }
+  .ms-actions button:hover{color:var(--gold); border-color:var(--gold);}
+  .ms-list{max-height:170px; overflow-y:auto;}
+  .ms-option{
+    display:flex; align-items:center; gap:7px; font-size:12.5px; padding:4px 3px;
+    border-radius:4px; cursor:pointer;
+  }
+  .ms-option:hover{background:rgba(255,255,255,0.04);}
+  .ms-option input{margin:0; accent-color: var(--gold);}
+  .ms-option span{overflow:hidden; text-overflow:ellipsis; white-space:nowrap;}
+
   .tabbar{
     display:flex; gap:6px; margin-bottom:22px; border-bottom:1px solid var(--border);
+    flex-wrap:wrap;
   }
   .tabbtn{
     background:transparent; border:none; color:var(--muted); font-size:13.5px; font-weight:600;
@@ -67,7 +149,7 @@
   .tabbtn.active{color:var(--gold); border-bottom:2px solid var(--gold);}
   .tabpage{display:none;}
   .tabpage.active{display:block;}
-  .search-row{display:flex; gap:10px; margin-bottom:14px; align-items:center; flex-wrap:wrap;}
+  .search-row{display:flex; gap:10px; margin-bottom:14px; align-items:flex-start; flex-wrap:wrap;}
   .search-row input[type=text]{
     background:var(--panel-2); color:var(--text); border:1px solid var(--border);
     border-radius:6px; padding:7px 10px; font-size:13px; min-width:220px;
@@ -106,6 +188,24 @@
   .pill.mid{background:rgba(217,164,65,0.15); color:var(--gold);}
   .live-dot{display:inline-block; width:8px; height:8px; border-radius:50%; background:var(--teal); margin-right:6px; box-shadow:0 0 6px var(--teal); animation:pulse 1.6s infinite;}
   @keyframes pulse{0%{opacity:1;}50%{opacity:0.35;}100%{opacity:1;}}
+  /* ---- Comparison tab ---- */
+  .cmp-controls select{
+    background:var(--panel-2); color:var(--text); border:1px solid var(--border);
+    border-radius:6px; padding:7px 10px; font-size:13px;
+  }
+  .cmp-controls label{font-size:11.5px; color:var(--muted); display:block; margin-bottom:4px;}
+  .cmp-controls .cmp-field{display:flex; flex-direction:column;}
+  /* ---- Top-N control (client-wise widgets) ---- */
+  .topn-input{
+    background:var(--panel-2); color:var(--text); border:1px solid var(--border);
+    border-radius:5px; padding:3px 7px; font-size:11.5px; width:58px; text-align:center;
+    font-family:inherit;
+  }
+  .topn-input:focus{outline:none; border-color:var(--gold);}
+  /* ---- Subtotal tab view toggle ---- */
+  .view-toggle{display:flex; gap:16px; align-items:center;}
+  .view-toggle label{font-size:12.5px; display:flex; align-items:center; gap:6px; cursor:pointer;}
+  .view-toggle input{accent-color: var(--gold);}
   @media (max-width: 980px){
     .kpis{grid-template-columns:repeat(2,1fr);}
     .grid, .grid3{grid-template-columns:1fr;}
@@ -119,24 +219,36 @@
       <h1>Margin<span>.</span>Dashboard</h1>
       <div class="sub"><span class="live-dot"></span>Exam Center Ops · Revenue &amp; Margin Overview (Live)</div>
     </div>
-    <div class="sub" id="periodLabel"></div>
+    <div class="topbar-right">
+      <div class="sub" id="periodLabel"></div>
+      <div class="theme-picker">
+        <button type="button" class="theme-btn" id="themeBtn"><span class="dot" id="themeDot"></span><span id="themeBtnLabel">Theme</span></button>
+        <div class="theme-panel" id="themePanel"></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="filter-bar-wrap">
+    <div class="filter-bar-head">
+      <h4>Filters (apply across all tabs)</h4>
+      <button class="clear-btn" id="clearFiltersBtn">Clear all</button>
+    </div>
+    <div class="filters" id="filterBar"></div>
   </div>
 
   <div class="tabbar">
     <button class="tabbtn active" data-tab="overview">Overview</button>
+    <button class="tabbtn" data-tab="monthly">Monthly Trend</button>
+    <button class="tabbtn" data-tab="clients">Client Analysis</button>
+    <button class="tabbtn" data-tab="services">Service Analysis</button>
+    <button class="tabbtn" data-tab="status">Status Overview</button>
+    <button class="tabbtn" data-tab="comparison">Comparison</button>
+    <button class="tabbtn" data-tab="quartercomp">Quarter Comparison</button>
     <button class="tabbtn" data-tab="projects">Project-wise</button>
+    <button class="tabbtn" data-tab="subtotal">Par candidate / OP /CAM-Expenses</button>
   </div>
 
   <div id="tab-overview" class="tabpage active">
-
-  <div class="filters">
-    <div><label>Month</label>
-      <select id="monthFilter"><option value="all">All Months</option></select>
-    </div>
-    <div><label>Service</label>
-      <select id="serviceFilter"><option value="all">All Services</option></select>
-    </div>
-  </div>
 
   <div class="kpis" id="kpiRow"></div>
 
@@ -153,12 +265,23 @@
 
   <div class="grid">
     <div class="card">
-      <h3>Top Clients by Revenue <span class="tag">top 10</span></h3>
+      <h3>Top Clients by Revenue <span class="tag">
+        Top <input type="text" class="topn-input" id="topNOverview" list="topNOptionsOverview" value="10"> clients
+        <datalist id="topNOptionsOverview">
+          <option value="5"></option>
+          <option value="10"></option>
+          <option value="15"></option>
+          <option value="20"></option>
+          <option value="50"></option>
+          <option value="100"></option>
+          <option value="All"></option>
+        </datalist>
+      </span></h3>
       <div class="chart-box"><canvas id="clientChart"></canvas></div>
     </div>
     <div class="card">
       <h3>Service-wise Margin % <span class="tag">all services</span></h3>
-      <div class="chart-box"><canvas id="serviceChart"></canvas></div>
+      <div class="chart-box tall"><canvas id="serviceChart"></canvas></div>
     </div>
   </div>
 
@@ -185,13 +308,196 @@
 
   </div>
 
+  <div id="tab-monthly" class="tabpage">
+
+  <div class="kpis" id="monthlyKpiRow"></div>
+
+  <div class="card">
+    <h3>Revenue, Margin &amp; Margin % by Month <span class="tag">monthly trend</span></h3>
+    <div class="chart-box tall"><canvas id="monthlyChart"></canvas></div>
+  </div>
+
+  <div class="card">
+    <h3>Monthly Trend Table <span class="tag" id="monthlyTableTag">months</span></h3>
+    <div class="scroll-table">
+    <table id="monthlyTable">
+      <thead><tr><th>Month</th><th class="num">Revenue</th><th class="num">Margin</th><th class="num">Margin %</th><th class="num">Projects</th><th class="num">MoM Revenue Δ</th><th class="num">MoM Margin % Δ</th></tr></thead>
+      <tbody></tbody>
+    </table>
+    </div>
+  </div>
+
+  </div>
+
+  <div id="tab-clients" class="tabpage">
+
+  <div class="kpis" id="clientsKpiRow"></div>
+
+  <div class="card">
+    <h3>Top Clients by Revenue <span class="tag">
+      Top <input type="text" class="topn-input" id="topNClientAnalysis" list="topNOptionsClientAnalysis" value="15"> clients, bar chart
+      <datalist id="topNOptionsClientAnalysis">
+        <option value="5"></option>
+        <option value="10"></option>
+        <option value="15"></option>
+        <option value="20"></option>
+        <option value="50"></option>
+        <option value="100"></option>
+        <option value="All"></option>
+      </datalist>
+    </span></h3>
+    <div class="chart-box tall"><canvas id="clientAnalysisChart"></canvas></div>
+  </div>
+
+  <div class="card">
+    <h3>Client Analysis <span class="tag" id="clientAnalysisTableTag">clients</span></h3>
+    <div class="search-row">
+      <input type="text" id="clientSearch" placeholder="Search client...">
+    </div>
+    <div class="scroll-table">
+    <table id="clientAnalysisTable">
+      <thead><tr><th>Client</th><th class="num">Revenue</th><th class="num">Margin</th><th class="num">Margin %</th><th class="num">Projects</th></tr></thead>
+      <tbody></tbody>
+    </table>
+    </div>
+  </div>
+
+  </div>
+
+  <div id="tab-services" class="tabpage">
+
+  <div class="kpis" id="servicesKpiRow"></div>
+
+  <div class="card">
+    <h3>Revenue, Margin &amp; Margin % by Service <span class="tag">bar chart</span></h3>
+    <div class="chart-box tall"><canvas id="serviceAnalysisChart"></canvas></div>
+  </div>
+
+  <div class="card">
+    <h3>Service Analysis <span class="tag" id="serviceAnalysisTableTag">services</span></h3>
+    <div class="scroll-table">
+    <table id="serviceAnalysisTable">
+      <thead><tr><th>Service</th><th class="num">Revenue</th><th class="num">Margin</th><th class="num">Margin %</th><th class="num">Projects</th></tr></thead>
+      <tbody></tbody>
+    </table>
+    </div>
+  </div>
+
+  </div>
+
+  <div id="tab-status" class="tabpage">
+
+  <div class="grid">
+    <div class="card">
+      <h3>Invoice Status <span class="tag">count &amp; revenue</span></h3>
+      <div class="chart-box"><canvas id="statusInvoiceChart"></canvas></div>
+      <div class="scroll-table" style="margin-top:14px;">
+      <table id="statusInvoiceTable">
+        <thead><tr><th>Status</th><th class="num">Count</th><th class="num">Revenue</th></tr></thead>
+        <tbody></tbody>
+      </table>
+      </div>
+    </div>
+    <div class="card">
+      <h3>Project Status <span class="tag">count &amp; revenue</span></h3>
+      <div class="chart-box"><canvas id="statusProjectChart"></canvas></div>
+      <div class="scroll-table" style="margin-top:14px;">
+      <table id="statusProjectTable">
+        <thead><tr><th>Status</th><th class="num">Count</th><th class="num">Revenue</th></tr></thead>
+        <tbody></tbody>
+      </table>
+      </div>
+    </div>
+  </div>
+
+  <div class="card">
+    <h3>Review Based on Invoice (Raised/Pending) <span class="tag">count &amp; revenue</span></h3>
+    <div class="scroll-table">
+    <table id="statusReviewTable">
+      <thead><tr><th>Status</th><th class="num">Count</th><th class="num">Revenue</th></tr></thead>
+      <tbody></tbody>
+    </table>
+    </div>
+  </div>
+
+  </div>
+
+  <div id="tab-comparison" class="tabpage">
+
+  <div class="card">
+    <h3>Comparison Mode <span class="tag">compare 2 or more months, quarters, clients or services side by side</span></h3>
+    <div class="search-row cmp-controls">
+      <div class="cmp-field">
+        <label for="cmpDimension">Compare by</label>
+        <select id="cmpDimension">
+          <option value="month">Month</option>
+          <option value="quarter">Quarter</option>
+          <option value="client">Client</option>
+          <option value="service">Service</option>
+        </select>
+      </div>
+      <div class="cmp-field multiselect" style="min-width:260px;">
+        <label>Groups to compare</label>
+        <button type="button" class="ms-btn" id="cmpGroupsBtn">Select groups</button>
+        <div class="ms-panel" id="cmpGroupsPanel">
+          <input type="text" class="ms-search" id="cmpGroupsSearch" placeholder="Search...">
+          <div class="ms-actions">
+            <button type="button" id="cmpGroupsAll">Select all</button>
+            <button type="button" id="cmpGroupsClear">Clear</button>
+          </div>
+          <div class="ms-list" id="cmpGroupsList"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="kpis" id="cmpKpiRow"></div>
+
+  <div class="card">
+    <h3>Side-by-Side <span class="tag">revenue, margin, margin %, projects</span></h3>
+    <div class="chart-box tall"><canvas id="cmpChart"></canvas></div>
+  </div>
+
+  <div class="card">
+    <h3>Comparison Table <span class="tag" id="cmpTableTag">groups, vs first selected</span></h3>
+    <div class="scroll-table">
+    <table id="cmpTable">
+      <thead><tr><th>Group</th><th class="num">Revenue</th><th class="num">Revenue Δ%</th><th class="num">Margin</th><th class="num">Margin %</th><th class="num">Margin % Δ (pts)</th><th class="num">Projects</th></tr></thead>
+      <tbody></tbody>
+    </table>
+    </div>
+  </div>
+
+  </div>
+
+  <div id="tab-quartercomp" class="tabpage">
+
+  <div class="kpis" id="quarterKpiRow"></div>
+
+  <div class="card">
+    <h3>Revenue, Margin &amp; Margin % by Quarter <span class="tag">quarter-on-quarter</span></h3>
+    <div class="chart-box tall"><canvas id="quarterChart"></canvas></div>
+  </div>
+
+  <div class="card">
+    <h3>Quarter-wise Table <span class="tag" id="quarterTableTag">quarters</span></h3>
+    <div class="scroll-table">
+    <table id="quarterTable">
+      <thead><tr><th>Quarter</th><th class="num">Revenue</th><th class="num">Margin</th><th class="num">Margin %</th><th class="num">Projects</th><th class="num">QoQ Revenue Δ%</th><th class="num">QoQ Margin % Δ (pts)</th></tr></thead>
+      <tbody></tbody>
+    </table>
+    </div>
+  </div>
+
+  </div>
+
   <div id="tab-projects" class="tabpage">
 
   <div class="kpis" id="projKpiRow"></div>
 
   <div class="grid">
     <div class="card">
-      <h3>Negative-Margin Projects <span class="tag">amount, sorted worst first</span></h3>
+      <h3>Negative-Margin Projects <span class="tag">amount, sorted worst first · click a bar to view it below</span></h3>
       <div class="chart-box tall"><canvas id="negChart"></canvas></div>
     </div>
     <div class="card">
@@ -205,12 +511,51 @@
     <div class="search-row">
       <input type="text" id="projSearch" placeholder="Search project code, client or service...">
       <label style="font-size:12px;"><input type="checkbox" id="negOnly"> Show negative only</label>
+      <label style="font-size:12px;"><input type="checkbox" id="posOnly"> Show positive only</label>
+      <div class="multiselect" style="min-width:190px;">
+        <label>Columns</label>
+        <button type="button" class="ms-btn" id="projColsBtn">Select columns</button>
+        <div class="ms-panel" id="projColsPanel">
+          <input type="text" class="ms-search" id="projColsSearch" placeholder="Search columns...">
+          <div class="ms-actions">
+            <button type="button" id="projColsAll">All</button>
+            <button type="button" id="projColsClear">Clear</button>
+            <button type="button" id="projColsDefault">Default</button>
+          </div>
+          <div class="ms-list" id="projColsList"></div>
+        </div>
+      </div>
     </div>
     <div class="scroll-table">
       <table id="projectTable">
-        <thead><tr><th>Project Code</th><th>Client</th><th>Service</th><th>Month</th><th class="num">Revenue</th><th class="num">Margin</th><th class="num">Margin %</th><th>Status</th></tr></thead>
+        <thead id="projectTableHead"></thead>
         <tbody></tbody>
       </table>
+    </div>
+  </div>
+
+  </div>
+
+  <div id="tab-subtotal" class="tabpage">
+
+  <div class="card">
+    <h3>Subtotal Details <span class="tag">Total Candidate · Op/Guard Actual Count/Cam Count/VOIP · Overall Subtotal · Subtotal (Ops) · Per Candidate &amp; Per Camera/OP/Guard Subtotals</span></h3>
+    <div class="search-row view-toggle">
+      <label><input type="radio" name="subtotalView" id="subtotalViewProject" value="project" checked> Project-wise</label>
+      <label><input type="radio" name="subtotalView" id="subtotalViewClient" value="client"> Client-wise</label>
+    </div>
+  </div>
+    </br>
+
+  <div class="kpis" id="subtotalKpiRow"></div>
+
+  <div class="card">
+    <h3>Subtotal Table <span class="tag" id="subtotalTableTag"></span></h3>
+    <div class="scroll-table">
+    <table id="subtotalTable">
+      <thead id="subtotalTableHead"></thead>
+      <tbody></tbody>
+    </table>
     </div>
   </div>
 
@@ -219,65 +564,352 @@
 </div>
 
 <script>
-const DATA = __DATA_JSON__;
+// ROWS = row-level data coming from Python (one object per sheet row, already cleaned).
+// MONTH_ORDER = chronological list of month labels, used to sort month-based charts/filters.
+const ROWS = __ROWS_JSON__;
+const MONTH_ORDER = __MONTH_ORDER_JSON__;
+// ALL_HEADERS = every original Google Sheet column header (row.allColumns keys),
+// used to power the "Columns" picker on the All Projects table.
+// DEFAULT_PROJECT_COLUMNS = the sheet columns that were shown by default before.
+const ALL_HEADERS = __ALL_HEADERS_JSON__;
+const DEFAULT_PROJECT_COLUMNS = __DEFAULT_COLUMNS_JSON__;
 
-const PROJECT_DATA = __PROJECT_JSON__;
-
+// fmtCr: formats a raw rupee number for display, auto-picking the right unit -
+// "₹X.XX Cr" at 1 Cr (1e7) or more, "₹X.XX L" (Lakh) from 1 Lakh (1e5) up to 1 Cr,
+// and "₹X.XX Hazar" (thousands) below 1 Lakh.
 const fmtCr = v => {
   if (v === null || v === undefined || isNaN(v)) return '-';
-  const cr = v/1e7;
-  return '₹' + cr.toFixed(2) + ' Cr';
+  const abs = Math.abs(v);
+  if (abs >= 1e7){
+    return '₹' + Math.round(v/1e7) + ' Cr';
+  }
+  if (abs >= 1e5){
+    return '₹' + Math.round(v/1e5) + ' L';
+  }
+  return '₹' + Math.round(v/1e3) + ' K';
 };
+// fmtNum: formats a number using Indian digit grouping (e.g. 12,34,567).
 const fmtNum = v => Number(v).toLocaleString('en-IN');
+
+// parseTopN: reads a Top-N control's value (typed or picked from the
+// datalist) and returns a positive integer, or Infinity for "All"/blank/
+// invalid input (which means "no limit, show everything").
+function parseTopN(value){
+  if (value === null || value === undefined) return Infinity;
+  const v = String(value).trim().toLowerCase();
+  if (v === '' || v === 'all' || v === '0') return Infinity;
+  const n = parseInt(v, 10);
+  return (isNaN(n) || n <= 0) ? Infinity : n;
+}
 
 Chart.defaults.color = '#8ea0c2';
 Chart.defaults.font.family = "'Segoe UI', Arial, sans-serif";
 Chart.defaults.borderColor = 'rgba(255,255,255,0.06)';
+
+// Register the datalabels plugin globally, but keep it OFF by default so
+// any chart that doesn't explicitly configure it isn't affected.
+// Each chart below turns it on via its own `plugins.datalabels` block -
+// this is what makes the value show permanently on the chart instead of
+// only appearing on hover (the hover tooltip still works as before too).
+Chart.register(ChartDataLabels);
+Chart.defaults.set('plugins.datalabels', { display: false });
 
 const COLORS = {
   gold:'#d9a441', teal:'#33b8a8', coral:'#e0665f', violet:'#8b7ee8', blue:'#4f8bd0'
 };
 const PALETTE = ['#d9a441','#33b8a8','#e0665f','#8b7ee8','#4f8bd0','#5cc96a','#e0a8d0','#e0d05f','#6fa8e0','#c98b5c','#8adfd4','#b98ae0'];
 
-let monthFilter = 'all';
-let serviceFilter = 'all';
-
-function populateFilters(){
-  const mSel = document.getElementById('monthFilter');
-  DATA.monthly.forEach(m=>{
-    const o = document.createElement('option'); o.value = m.Month; o.textContent = m.Month;
-    mSel.appendChild(o);
-  });
-  const sSel = document.getElementById('serviceFilter');
-  DATA.service.forEach(s=>{
-    const o = document.createElement('option'); o.value = s.Service; o.textContent = s.Service;
-    sSel.appendChild(o);
-  });
-  mSel.addEventListener('change', e=>{ monthFilter = e.target.value; renderAll(); });
-  sSel.addEventListener('change', e=>{ serviceFilter = e.target.value; renderAll(); });
+// quarterSortKey: turns a "Q1-2026" style label into a sortable number
+// (year*10 + quarter) so Quarter filters/dropdowns/comparisons order
+// chronologically instead of A-Z (which would wrongly put Q1-2026 before Q4-2025).
+function quarterSortKey(q){
+  const m = /Q(\d+)\D+(\d{4})/.exec(String(q||''));
+  if (!m) return Number.MAX_SAFE_INTEGER;
+  return parseInt(m[2],10)*10 + parseInt(m[1],10);
 }
 
-function filteredScatter(){
-  return DATA.scatter.filter(r => (monthFilter==='all' || r.Month===monthFilter) && (serviceFilter==='all' || r.Service===serviceFilter));
+// ---------------- Generic filter system (shared across all tabs) ----------------
+// FILTER_DEFS: describes every filter shown in the top filter bar -
+// key = internal id, label = shown to user, field = matching key in each row object,
+// order (optional) = fixed sort order for values (used for Month so it doesn't sort A-Z).
+const FILTER_DEFS = [
+  {key:'fy', label:'FY', field:'fy'},
+  {key:'quarter', label:'Quarter', field:'quarter'},
+  {key:'month', label:'Month', field:'month', order: MONTH_ORDER},
+  {key:'service', label:'Service', field:'service'},
+  {key:'client', label:'Client', field:'client'},
+  {key:'clientSSC', label:'Client (With SSC)', field:'clientSSC'},
+  {key:'projectCode', label:'Project Code', field:'projectCode'},
+  {key:'examNameDate', label:'Exam Name & Date', field:'examNameDate'},
+  {key:'projectStatus', label:'Project Status', field:'projectStatus'},
+  {key:'invoiceStatus', label:'Invoice Status', field:'invoiceStatus'},
+  {key:'reviewInvoice', label:'Review (Raised/Pending)', field:'reviewInvoice'},
+  {key:'billingType', label:'Billing Type', field:'billingType'},
+  {key:'billingStatus', label:'Billing Status', field:'billingStatus'},
+  {key:'marginPct', label:'Margin % - Overall Subtotal', field:'marginPct'},
+  {key:'marginPctOps', label:'Margin % - Overall Subtotal-OPs', field:'marginPctOps'},
+];
+
+// activeFilters: for every filter key we now store a Set of the EXACT values
+// the user selected (multi-select). Empty Set = no restriction = "show all".
+const activeFilters = {};
+FILTER_DEFS.forEach(f => activeFilters[f.key] = new Set());
+
+// uniqueValues: collects the distinct, non-blank values for a field (used to
+// populate each filter's checkbox list), sorted either by a custom `order`
+// (e.g. month order) or alphabetically.
+function uniqueValues(field, order){
+  const vals = Array.from(new Set(ROWS.map(r => r[field]).filter(v => v !== null && v !== undefined && v !== '')));
+  if (order && order.length){
+    const idx = new Map(order.map((m,i)=>[m,i]));
+    vals.sort((a,b) => (idx.has(a)?idx.get(a):999) - (idx.has(b)?idx.get(b):999));
+  } else if (field === 'quarter'){
+    vals.sort((a,b) => quarterSortKey(a) - quarterSortKey(b));
+  } else {
+    vals.sort();
+  }
+  return vals;
 }
 
+// triggerFilterChange: re-renders whichever tab is currently visible whenever
+// any filter selection changes.
+function triggerFilterChange(){
+  const active = document.querySelector('.tabpage.active');
+  const tabId = active ? active.id : 'tab-overview';
+  renderTab(tabId);
+}
+
+// renderTab: dispatches to the correct render function for the currently
+// visible tab. Called on filter change and on tab switch.
+function renderTab(tabId){
+  if (tabId === 'tab-overview') renderAll();
+  else if (tabId === 'tab-monthly') renderMonthlyTab();
+  else if (tabId === 'tab-clients') renderClientsTab();
+  else if (tabId === 'tab-services') renderServicesTab();
+  else if (tabId === 'tab-status') renderStatusTab();
+  else if (tabId === 'tab-comparison') populateCmpGroups();
+  else if (tabId === 'tab-quartercomp') renderQuarterTab();
+  else if (tabId === 'tab-projects') renderProjectTab();
+  else if (tabId === 'tab-subtotal') renderSubtotalTab();
+}
+
+// buildFilterBar: builds one multi-select dropdown per entry in FILTER_DEFS.
+// Each dropdown = a button (shows "All" / value / "N selected") + a popup
+// panel containing a search box and a checkbox per unique value.
+function buildFilterBar(){
+  const bar = document.getElementById('filterBar');
+  bar.innerHTML = '';
+
+  FILTER_DEFS.forEach(f => {
+    const values = uniqueValues(f.field, f.order);
+
+    const wrap = document.createElement('div');
+    wrap.className = 'multiselect';
+    wrap.innerHTML = `
+      <label>${f.label}</label>
+      <button type="button" class="ms-btn" id="msbtn_${f.key}">All</button>
+      <div class="ms-panel" id="mspanel_${f.key}">
+        <input type="text" class="ms-search" placeholder="Search...">
+        <div class="ms-actions">
+          <button type="button" class="ms-all">Select all</button>
+          <button type="button" class="ms-clear">Clear</button>
+        </div>
+        <div class="ms-list"></div>
+      </div>
+    `;
+    bar.appendChild(wrap);
+
+    const listEl = wrap.querySelector('.ms-list');
+    const btn = wrap.querySelector('.ms-btn');
+    const panel = wrap.querySelector('.ms-panel');
+
+    // one checkbox row per unique value
+    values.forEach(v => {
+      const row = document.createElement('label');
+      row.className = 'ms-option';
+      const cb = document.createElement('input');
+      cb.type = 'checkbox';
+      cb.value = v;
+      const span = document.createElement('span');
+      span.textContent = v;
+      row.appendChild(cb);
+      row.appendChild(span);
+      listEl.appendChild(row);
+    });
+
+    // open/close this dropdown (and close any other open dropdown)
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      document.querySelectorAll('.ms-panel.open').forEach(p => { if (p !== panel) p.classList.remove('open'); });
+      panel.classList.toggle('open');
+    });
+    // clicking inside the panel shouldn't close it via the document-click handler below
+    panel.addEventListener('click', (e) => e.stopPropagation());
+
+    // live search inside this dropdown's option list
+    wrap.querySelector('.ms-search').addEventListener('input', (e) => {
+      const term = e.target.value.toLowerCase();
+      listEl.querySelectorAll('.ms-option').forEach(opt => {
+        opt.style.display = opt.textContent.toLowerCase().includes(term) ? '' : 'none';
+      });
+    });
+
+    // "Select all" ticks every currently-visible (i.e. not search-filtered-out) option
+    wrap.querySelector('.ms-all').addEventListener('click', () => {
+      listEl.querySelectorAll('.ms-option').forEach(opt => {
+        if (opt.style.display !== 'none') opt.querySelector('input').checked = true;
+      });
+      applyMultiSelect(f.key, listEl, btn);
+    });
+    // "Clear" unticks everything for this filter only
+    wrap.querySelector('.ms-clear').addEventListener('click', () => {
+      listEl.querySelectorAll('input[type=checkbox]').forEach(c => c.checked = false);
+      applyMultiSelect(f.key, listEl, btn);
+    });
+
+    // any checkbox toggle updates the active filter + re-renders
+    listEl.addEventListener('change', () => applyMultiSelect(f.key, listEl, btn));
+  });
+}
+
+// applyMultiSelect: reads which checkboxes are ticked for one filter, stores
+// them as the active (exact-match) selection, updates the button label, and
+// re-renders the dashboard.
+function applyMultiSelect(key, listEl, btn){
+  const checked = Array.from(listEl.querySelectorAll('input[type=checkbox]:checked')).map(c => c.value);
+  activeFilters[key] = new Set(checked);
+  btn.textContent = checked.length === 0 ? 'All' : (checked.length === 1 ? checked[0] : checked.length + ' selected');
+  btn.classList.toggle('active', checked.length > 0);
+  triggerFilterChange();
+}
+
+// close any open dropdown when clicking elsewhere on the page
+document.addEventListener('click', () => {
+  document.querySelectorAll('.ms-panel.open').forEach(p => p.classList.remove('open'));
+  document.querySelectorAll('.theme-panel.open').forEach(p => p.classList.remove('open'));
+});
+
+// "Clear all" button: resets every filter's Set + unticks every checkbox + resets every button label
+document.getElementById('clearFiltersBtn').addEventListener('click', () => {
+  FILTER_DEFS.forEach(f => {
+    activeFilters[f.key] = new Set();
+    const panel = document.getElementById('mspanel_' + f.key);
+    if (panel) panel.querySelectorAll('input[type=checkbox]').forEach(c => c.checked = false);
+    const btn = document.getElementById('msbtn_' + f.key);
+    if (btn) { btn.textContent = 'All'; btn.classList.remove('active'); }
+  });
+  triggerFilterChange();
+});
+
+// rowMatches: a row passes if, for every filter, either nothing is selected
+// (Set is empty -> no restriction) or the row's value is one of the exactly
+// selected values. Exact match (Set.has) instead of substring match is what
+// fixes the wrong Quarter / Margin % filtering from before.
+function rowMatches(row){
+  return FILTER_DEFS.every(f => {
+    const selected = activeFilters[f.key];
+    if (!selected || selected.size === 0) return true;
+    return selected.has(String(row[f.field] ?? ''));
+  });
+}
+
+// getFilteredRows: applies all active filters to the full ROWS dataset.
+function getFilteredRows(){
+  return ROWS.filter(rowMatches);
+}
+
+// drillFilter: sets a single exact-match filter (used when the person clicks
+// a bar/segment on any chart, or an Alerts list item) and jumps to the
+// Project-wise tab so the underlying rows are immediately visible.
+function drillFilter(key, value){
+  if (value === undefined || value === null || value === '') return;
+  activeFilters[key] = new Set([value]);
+  const listEl = document.querySelector('#mspanel_' + key + ' .ms-list');
+  const btn = document.getElementById('msbtn_' + key);
+  if (listEl){
+    listEl.querySelectorAll('input[type=checkbox]').forEach(c => { c.checked = (c.value === value); });
+  }
+  if (btn){ btn.textContent = value; btn.classList.add('active'); }
+  const projBtn = document.querySelector('.tabbtn[data-tab="projects"]');
+  if (projBtn) projBtn.click();
+}
+
+// ---------------- Client-side aggregation from row-level data ----------------
+// aggregateBy: groups rows by a field and sums Revenue/Margin/Projects,
+// then derives MarginPct per group AS A WEIGHTED RATIO (sum of margin over
+// sum of revenue for that group) - never as a simple average of each row's
+// own margin %. Averaging row-level percentages directly would over/under-
+// weight small projects vs big ones (e.g. 10 projects with wildly different
+// revenue but averaging to "15%" doesn't reflect the group's real combined
+// margin). Used for client/service/month/quarter charts & tables.
+function aggregateBy(rows, field){
+  const map = new Map();
+  rows.forEach(r => {
+    const key = r[field] || '(blank)';
+    if (!map.has(key)) map.set(key, {Revenue:0, Margin:0, Projects:0});
+    const g = map.get(key);
+    g.Revenue += (r.revenue || 0);
+    g.Margin += (r.margin || 0);
+    g.Projects += 1;
+  });
+  return Array.from(map.entries()).map(([key, g]) => ({
+    key, Revenue: g.Revenue, Margin: g.Margin, Projects: g.Projects,
+    // Margin % = (sum of Margin Amount Based On Overall Subtotal) / (sum of Revenue) * 100
+    MarginPct: g.Revenue !== 0 ? (g.Margin / g.Revenue * 100) : 0
+  }));
+}
+
+// aggregateCount: groups rows by a field and just counts occurrences (used
+// for status/invoice pie & doughnut charts).
+function aggregateCount(rows, field){
+  const map = new Map();
+  rows.forEach(r => {
+    const key = r[field] || '(blank)';
+    map.set(key, (map.get(key)||0) + 1);
+  });
+  return Array.from(map.entries()).map(([key, Count]) => ({key, Count}));
+}
+
+// aggregateCountRevenue: groups rows by a field, counting occurrences AND
+// summing revenue (used for the Status Overview tab's tables/charts, which
+// need both Count and Revenue per status - matches the Excel "Status Overview" sheet).
+function aggregateCountRevenue(rows, field){
+  const map = new Map();
+  rows.forEach(r => {
+    const key = r[field] || '(blank)';
+    if (!map.has(key)) map.set(key, {Count:0, Revenue:0});
+    const g = map.get(key);
+    g.Count += 1;
+    g.Revenue += (r.revenue || 0);
+  });
+  return Array.from(map.entries()).map(([key, g]) => ({key, Count: g.Count, Revenue: g.Revenue}));
+}
+
+// ---------------- Overview tab rendering ----------------
 let charts = {};
+// destroy: removes a previously-drawn Chart.js instance before redrawing it
+// (Chart.js needs the old instance destroyed or it throws "canvas already in use").
 function destroy(id){ if(charts[id]){ charts[id].destroy(); } }
 
+// renderKPIs: computes and draws the 5 top KPI cards for the Overview tab
+// (Total Revenue, Total Projects, Avg Margin %, Active Projects, Invoices Pending).
 function renderKPIs(){
-  const rows = filteredScatter();
-  const totalRevenue = rows.reduce((a,b)=>a+b.Revenue,0);
+  const rows = getFilteredRows();
+  const totalRevenue = rows.reduce((a,b)=>a+(b.revenue||0),0);
+  const totalMarginAmt = rows.reduce((a,b)=>a+(b.margin||0),0);
   const totalProjects = rows.length;
-  const avgMargin = rows.length ? (rows.reduce((a,b)=>a+b['MarginPct'],0)/rows.length) : 0;
-  const pendingCount = DATA.istatus.find(i=>i['Invoice Status']==='Pending')?.Count || 0;
-  const activeCount = DATA.pstatus.find(p=>p['Project Status']==='Active')?.Count || 0;
+  const avgMargin = totalRevenue !== 0 ? (totalMarginAmt / totalRevenue * 100) : 0;
+  const invoiceAgg = aggregateCount(rows, 'invoiceStatus');
+  const pendingCount = invoiceAgg.find(i=>/pending/i.test(i.key))?.Count || 0;
+  const statusAgg = aggregateCount(rows, 'projectStatus');
+  const activeCount = statusAgg.find(p=>/active/i.test(p.key))?.Count || 0;
 
   const kpiRow = document.getElementById('kpiRow');
   kpiRow.innerHTML = '';
   const items = [
     {label:'Total Revenue', value: fmtCr(totalRevenue), delta:''},
     {label:'Total Projects', value: fmtNum(totalProjects), delta:''},
-    {label:'Avg Margin %', value: avgMargin.toFixed(1)+'%', delta: avgMargin>60?'healthy':'watch', cls: avgMargin>60?'up':'down'},
+    {label:'Avg Margin %', value: Math.round(avgMargin)+'%', delta: avgMargin>60?'healthy':'watch', cls: avgMargin>60?'up':'down'},
     {label:'Active Projects', value: fmtNum(activeCount), delta:''},
     {label:'Invoices Pending', value: fmtNum(pendingCount), delta:'needs follow-up', cls:'down'}
   ];
@@ -291,24 +923,36 @@ function renderKPIs(){
 function renderTrend(){
   destroy('trend');
   const ctx = document.getElementById('trendChart');
-  const labels = DATA.monthly.map(m=>m.Month);
+  const rows = getFilteredRows();
+  const agg = aggregateBy(rows, 'month');
+  const idx = new Map(MONTH_ORDER.map((m,i)=>[m,i]));
+  agg.sort((a,b)=> (idx.has(a.key)?idx.get(a.key):999) - (idx.has(b.key)?idx.get(b.key):999));
+  const labels = agg.map(m=>m.key);
   charts.trend = new Chart(ctx, {
     data:{
       labels,
       datasets:[
-        {type:'bar', label:'Revenue (Cr)', data: DATA.monthly.map(m=>+(m.Revenue/1e7).toFixed(2)), backgroundColor:'rgba(79,139,208,0.55)', borderRadius:5, yAxisID:'y'},
-        {type:'bar', label:'Margin (Cr)', data: DATA.monthly.map(m=>+(m.Margin/1e7).toFixed(2)), backgroundColor:'rgba(217,164,65,0.7)', borderRadius:5, yAxisID:'y'},
-        {type:'line', label:'Margin %', data: DATA.monthly.map(m=>m.MarginPct), borderColor:COLORS.teal, backgroundColor:COLORS.teal, tension:0.35, yAxisID:'y1', pointRadius:4}
+        {type:'bar', label:'Revenue (Cr)', data: agg.map(m=>Math.round(m.Revenue/1e7)), backgroundColor:'rgba(79,139,208,0.55)', borderRadius:5, yAxisID:'y'},
+        {type:'bar', label:'Margin (Cr)', data: agg.map(m=>Math.round(m.Margin/1e7)), backgroundColor:'rgba(217,164,65,0.7)', borderRadius:5, yAxisID:'y'},
+        {type:'line', label:'Margin %', data: agg.map(m=>m.MarginPct), borderColor:COLORS.teal, backgroundColor:COLORS.teal, tension:0.35, yAxisID:'y1', pointRadius:4}
       ]
     },
     options:{
       responsive:true, maintainAspectRatio:false,
       interaction:{mode:'index', intersect:false},
+      layout:{padding:{top:18}},
       scales:{
         y:{position:'left', grid:{color:'rgba(255,255,255,0.06)'}, title:{display:true,text:'₹ Cr'}},
         y1:{position:'right', grid:{display:false}, title:{display:true,text:'Margin %'}, min:0}
       },
-      plugins:{legend:{position:'bottom', labels:{boxWidth:12}}}
+      plugins:{
+        legend:{position:'bottom', labels:{boxWidth:12}},
+        datalabels:{
+          display:true, clip:true, color: currentDatalabelColor, font:{size:10, weight:'600'}, anchor:'end', align:'top',
+          formatter:(v, ctx)=> ctx.dataset.type==='line' ? Math.round(v)+'%' : v
+        }
+      },
+      onClick:(evt, elements)=>{ if(elements.length) drillFilter('month', labels[elements[0].index]); }
     }
   });
 }
@@ -316,30 +960,49 @@ function renderTrend(){
 function renderStatus(){
   destroy('status');
   const ctx = document.getElementById('statusChart');
+  const rows = getFilteredRows();
+  const agg = aggregateCount(rows, 'projectStatus');
+  const labels = agg.map(p=>p.key);
   charts.status = new Chart(ctx, {
     type:'doughnut',
     data:{
-      labels: DATA.pstatus.map(p=>p['Project Status']),
-      datasets:[{data: DATA.pstatus.map(p=>p.Count), backgroundColor:[COLORS.teal, COLORS.coral, COLORS.gold], borderWidth:2, borderColor:'#121b2e'}]
+      labels,
+      datasets:[{data: agg.map(p=>p.Count), backgroundColor: PALETTE, borderWidth:2, borderColor:'#121b2e'}]
     },
-    options:{responsive:true, maintainAspectRatio:false, plugins:{legend:{position:'bottom'}}}
+    options:{
+      responsive:true, maintainAspectRatio:false,
+      plugins:{
+        legend:{position:'bottom'},
+        datalabels:{ display:true, color: currentDatalabelColor, font:{size:11, weight:'700'}, formatter:(v)=> v }
+      },
+      onClick:(evt, elements)=>{ if(elements.length) drillFilter('projectStatus', labels[elements[0].index]); }
+    }
   });
 }
 
 function renderClient(){
   destroy('client');
   const ctx = document.getElementById('clientChart');
-  const top = [...DATA.client].sort((a,b)=>b.Revenue-a.Revenue).slice(0,10);
+  const rows = getFilteredRows();
+  const agg = aggregateBy(rows, 'client');
+  const sorted = [...agg].sort((a,b)=>b.Revenue-a.Revenue);
+  const n = (typeof topNOverview !== 'undefined') ? topNOverview : 10;
+  const top = n === Infinity ? sorted : sorted.slice(0, n);
+  const rawKeys = top.map(c=>c.key);
   charts.client = new Chart(ctx, {
     type:'bar',
     data:{
-      labels: top.map(c=>c.Client.length>22? c.Client.slice(0,20)+'…': c.Client),
-      datasets:[{label:'Revenue (Cr)', data: top.map(c=>+(c.Revenue/1e7).toFixed(2)), backgroundColor: PALETTE[4], borderRadius:5}]
+      labels: top.map(c=>c.key.length>22? c.key.slice(0,20)+'…': c.key),
+      datasets:[{label:'Revenue (Cr)', data: top.map(c=>Math.round(c.Revenue/1e7)), backgroundColor: PALETTE[4], borderRadius:5}]
     },
     options:{
       indexAxis:'y', responsive:true, maintainAspectRatio:false,
-      plugins:{legend:{display:false}},
-      scales:{x:{title:{display:true, text:'₹ Cr'}}}
+      plugins:{
+        legend:{display:false},
+        datalabels:{ display:true, clip:true, color: currentDatalabelColor, font:{size:10, weight:'600'}, anchor:'end', align:'right', formatter:(v)=> v }
+      },
+      scales:{x:{title:{display:true, text:'₹ Cr'}}},
+      onClick:(evt, elements)=>{ if(elements.length) drillFilter('client', rawKeys[elements[0].index]); }
     }
   });
 }
@@ -347,17 +1010,29 @@ function renderClient(){
 function renderService(){
   destroy('service');
   const ctx = document.getElementById('serviceChart');
-  const svc = [...DATA.service].sort((a,b)=>b.MarginPct-a.MarginPct);
+  const rows = getFilteredRows();
+  const agg = [...aggregateBy(rows, 'service')].sort((a,b)=>b.MarginPct-a.MarginPct);
+  const rawKeys = agg.map(s=>s.key);
+  const labels = rawKeys.map(k => k.length>18 ? k.slice(0,16)+'…' : k);
   charts.service = new Chart(ctx, {
     type:'bar',
     data:{
-      labels: svc.map(s=>s.Service),
-      datasets:[{label:'Margin %', data: svc.map(s=>s.MarginPct), backgroundColor: svc.map(s=> s.MarginPct<0? COLORS.coral : PALETTE[1]), borderRadius:5}]
+      labels,
+      datasets:[{label:'Margin %', data: agg.map(s=>s.MarginPct), backgroundColor: agg.map(s=> s.MarginPct<0? COLORS.coral : PALETTE[1]), borderRadius:5}]
     },
     options:{
       responsive:true, maintainAspectRatio:false,
-      plugins:{legend:{display:false}},
-      scales:{x:{ticks:{autoSkip:false, maxRotation:45, minRotation:30}}, y:{title:{display:true,text:'%'}}}
+      layout:{padding:{top:18, bottom:4}},
+      plugins:{
+        legend:{display:false},
+        tooltip:{callbacks:{title:(items)=> items.length ? rawKeys[items[0].dataIndex] : ''}},
+        datalabels:{ display:true, clip:true, color: currentDatalabelColor, font:{size:10, weight:'600'}, anchor:'end', align:'top', formatter:(v)=> Math.round(v)+'%' }
+      },
+      scales:{
+        x:{ticks:{autoSkip:false, maxRotation:60, minRotation:45, font:{size:10}}},
+        y:{title:{display:true,text:'%'}}
+      },
+      onClick:(evt, elements)=>{ if(elements.length) drillFilter('service', rawKeys[elements[0].index]); }
     }
   });
 }
@@ -365,14 +1040,14 @@ function renderService(){
 function renderScatter(){
   destroy('scatter');
   const ctx = document.getElementById('scatterChart');
-  const rows = filteredScatter();
-  const points = rows.map(r=>({x: r.Revenue/1e5, y: r['MarginPct'], r: Math.min(18, Math.max(4, Math.sqrt(Math.abs(r.Revenue))/700))}));
+  const rows = getFilteredRows();
+  const points = rows.map(r=>({x: (r.revenue||0)/1e5, y: r.marginPct||0, r: Math.min(18, Math.max(4, Math.sqrt(Math.abs(r.revenue||0))/700))}));
   charts.scatter = new Chart(ctx, {
     type:'bubble',
     data:{ datasets:[{label:'Projects', data: points, backgroundColor:'rgba(139,126,232,0.55)', borderColor:'rgba(139,126,232,0.9)'}] },
     options:{
       responsive:true, maintainAspectRatio:false,
-      plugins:{legend:{display:false}, tooltip:{callbacks:{label: (c)=> 'Revenue ₹'+(c.raw.x).toFixed(1)+'L, Margin '+c.raw.y.toFixed(1)+'%'}}},
+      plugins:{legend:{display:false}, tooltip:{callbacks:{label: (c)=> 'Revenue ₹'+Math.round(c.raw.x)+'L, Margin '+Math.round(c.raw.y)+'%'}}},
       scales:{
         x:{title:{display:true, text:'Revenue (₹ Lakh)'}},
         y:{title:{display:true, text:'Margin %'}}
@@ -384,27 +1059,41 @@ function renderScatter(){
 function renderInvoice(){
   destroy('invoice');
   const ctx = document.getElementById('invoiceChart');
+  const rows = getFilteredRows();
+  const agg = aggregateCount(rows, 'reviewInvoice');
+  const labels = agg.map(i=>i.key);
   charts.invoice = new Chart(ctx, {
     type:'pie',
     data:{
-      labels: DATA.istatus.map(i=>i['Invoice Status']),
-      datasets:[{data: DATA.istatus.map(i=>i.Count), backgroundColor:[COLORS.teal, COLORS.gold, COLORS.coral], borderWidth:2, borderColor:'#121b2e'}]
+      labels,
+      datasets:[{data: agg.map(i=>i.Count), backgroundColor:[COLORS.teal, COLORS.gold, COLORS.coral, COLORS.violet], borderWidth:2, borderColor:'#121b2e'}]
     },
-    options:{responsive:true, maintainAspectRatio:false, plugins:{legend:{position:'bottom'}}}
+    options:{
+      responsive:true, maintainAspectRatio:false,
+      plugins:{
+        legend:{position:'bottom'},
+        datalabels:{ display:true, color: currentDatalabelColor, font:{size:11, weight:'700'}, formatter:(v)=> v }
+      },
+      onClick:(evt, elements)=>{ if(elements.length) drillFilter('reviewInvoice', labels[elements[0].index]); }
+    }
   });
 }
 
 function renderTable(){
   const tbody = document.querySelector('#clientTable tbody');
   tbody.innerHTML='';
-  const rows = [...DATA.client].sort((a,b)=>b.Revenue-a.Revenue);
-  rows.forEach(c=>{
+  const rows = getFilteredRows();
+  let agg = [...aggregateBy(rows, 'client')].sort((a,b)=>b.Revenue-a.Revenue);
+  const fullCount = agg.length;
+  const n = (typeof topNOverview !== 'undefined') ? topNOverview : Infinity;
+  if (n !== Infinity) agg = agg.slice(0, n);
+  agg.forEach(c=>{
     const tr = document.createElement('tr');
     const pillClass = c.MarginPct >= 60 ? 'good' : (c.MarginPct >=0 ? 'mid':'bad');
-    tr.innerHTML = `<td>${c.Client}</td><td class="num">${c.Projects}</td><td class="num">${fmtCr(c.Revenue)}</td><td class="num">${fmtCr(c.Margin)}</td><td class="num"><span class="pill ${pillClass}">${c.MarginPct.toFixed(1)}%</span></td>`;
+    tr.innerHTML = `<td>${c.key}</td><td class="num">${c.Projects}</td><td class="num">${fmtCr(c.Revenue)}</td><td class="num">${fmtCr(c.Margin)}</td><td class="num"><span class="pill ${pillClass}">${Math.round(c.MarginPct)}%</span></td>`;
     tbody.appendChild(tr);
   });
-  document.getElementById('clientTableTag').textContent = DATA.client.length + ' clients';
+  document.getElementById('clientTableTag').textContent = (n === Infinity ? agg.length + ' clients' : agg.length + ' of ' + fullCount + ' clients (top ' + n + ')');
 }
 
 function renderAll(){
@@ -418,33 +1107,705 @@ function renderAll(){
   renderTable();
 }
 
-// ---------------- Tab switching ----------------
+let topNOverview = 10;
+document.getElementById('topNOverview').addEventListener('input', e=>{
+  topNOverview = parseTopN(e.target.value);
+  renderClient();
+  renderTable();
+});
+document.getElementById('topNOverview').addEventListener('change', e=>{
+  topNOverview = parseTopN(e.target.value);
+  renderClient();
+  renderTable();
+});
+
+function forecastGrowth(agg, field){
+  if (agg.length < 2) return null;
+  const recent = agg.slice(-Math.min(3, agg.length));
+  const growths = [];
+  for (let i=1; i<recent.length; i++){
+    const prev = recent[i-1][field], curr = recent[i][field];
+    if (prev) growths.push((curr-prev)/prev);
+  }
+  const avgGrowth = growths.length ? growths.reduce((a,b)=>a+b,0)/growths.length : 0;
+  return recent[recent.length-1][field] * (1+avgGrowth);
+}
+
+function forecastAverage(agg, field){
+  if (!agg.length) return null;
+  const recent = agg.slice(-Math.min(3, agg.length));
+  return recent.reduce((a,b)=>a+b[field],0)/recent.length;
+}
+
+function renderMonthlyKPIs(agg){
+  const row = document.getElementById('monthlyKpiRow');
+  row.innerHTML = '';
+  const totalRevenue = agg.reduce((a,b)=>a+b.Revenue,0);
+  const totalMargin = agg.reduce((a,b)=>a+b.Margin,0);
+  const bestMonth = agg.length ? [...agg].sort((a,b)=>b.MarginPct-a.MarginPct)[0] : null;
+  const projRevenue = forecastGrowth(agg, 'Revenue');
+  const projMarginPct = forecastAverage(agg, 'MarginPct');
+  const items = [
+    {label:'Total Revenue', value: fmtCr(totalRevenue)},
+    {label:'Total Margin', value: fmtCr(totalMargin)},
+    {label:'Months in View', value: fmtNum(agg.length)},
+    {label:'Best Margin % Month', value: bestMonth ? bestMonth.key : '-'},
+    {label:'Projected Next Month Revenue', value: projRevenue===null ? '-' : fmtCr(projRevenue), delta:'trend-based estimate', cls:''},
+    {label:'Projected Next Month Margin %', value: projMarginPct===null ? '-' : Math.round(projMarginPct)+'%', delta:'avg of last 3 months', cls:''},
+  ];
+  items.forEach(it=>{
+    const div = document.createElement('div'); div.className='kpi';
+    div.innerHTML = `<div class="label">${it.label}</div><div class="value">${it.value}</div>` + (it.delta?`<div class="delta">${it.delta}</div>`:'');
+    row.appendChild(div);
+  });
+}
+
+function renderMonthlyChart(agg){
+  destroy('monthly');
+  const ctx = document.getElementById('monthlyChart');
+  const labels = agg.map(m=>m.key);
+  charts.monthly = new Chart(ctx, {
+    data:{
+      labels,
+      datasets:[
+        {type:'bar', label:'Revenue (Cr)', data: agg.map(m=>Math.round(m.Revenue/1e7)), backgroundColor:'rgba(79,139,208,0.55)', borderRadius:5, yAxisID:'y'},
+        {type:'bar', label:'Margin (Cr)', data: agg.map(m=>Math.round(m.Margin/1e7)), backgroundColor:'rgba(217,164,65,0.7)', borderRadius:5, yAxisID:'y'},
+        {type:'line', label:'Margin %', data: agg.map(m=>m.MarginPct), borderColor:COLORS.teal, backgroundColor:COLORS.teal, tension:0.35, yAxisID:'y1', pointRadius:4}
+      ]
+    },
+    options:{
+      responsive:true, maintainAspectRatio:false,
+      interaction:{mode:'index', intersect:false},
+      layout:{padding:{top:18}},
+      scales:{
+        y:{position:'left', grid:{color:'rgba(255,255,255,0.06)'}, title:{display:true,text:'₹ Cr'}},
+        y1:{position:'right', grid:{display:false}, title:{display:true,text:'Margin %'}, min:0}
+      },
+      plugins:{
+        legend:{position:'bottom', labels:{boxWidth:12}},
+        datalabels:{
+          display:true, clip:true, color: currentDatalabelColor, font:{size:10, weight:'600'}, anchor:'end', align:'top',
+          formatter:(v, ctx)=> ctx.dataset.type==='line' ? Math.round(v)+'%' : v
+        }
+      },
+      onClick:(evt, elements)=>{ if(elements.length) drillFilter('month', labels[elements[0].index]); }
+    }
+  });
+}
+
+function renderMonthlyTable(agg){
+  const tbody = document.querySelector('#monthlyTable tbody');
+  tbody.innerHTML = '';
+  agg.forEach((m,i)=>{
+    const tr = document.createElement('tr');
+    const pillClass = m.MarginPct >= 60 ? 'good' : (m.MarginPct >=0 ? 'mid':'bad');
+    const prev = i>0 ? agg[i-1] : null;
+    const revDelta = (prev && prev.Revenue) ? ((m.Revenue-prev.Revenue)/Math.abs(prev.Revenue)*100) : null;
+    const mpDelta = prev ? (m.MarginPct - prev.MarginPct) : null;
+    const revDeltaHtml = revDelta===null ? '-' : `<span class="${revDelta>=0?'up':'down'}">${revDelta>=0?'+':''}${Math.round(revDelta)}%</span>`;
+    const mpDeltaHtml = mpDelta===null ? '-' : `<span class="${mpDelta>=0?'up':'down'}">${mpDelta>=0?'+':''}${Math.round(mpDelta)} pts</span>`;
+    tr.innerHTML = `<td>${m.key}</td><td class="num">${fmtCr(m.Revenue)}</td><td class="num">${fmtCr(m.Margin)}</td><td class="num"><span class="pill ${pillClass}">${Math.round(m.MarginPct)}%</span></td><td class="num">${fmtNum(m.Projects)}</td><td class="num">${revDeltaHtml}</td><td class="num">${mpDeltaHtml}</td>`;
+    tbody.appendChild(tr);
+  });
+  document.getElementById('monthlyTableTag').textContent = agg.length + ' months';
+}
+
+function renderMonthlyTab(){
+  const rows = getFilteredRows();
+  const agg = aggregateBy(rows, 'month');
+  const idx = new Map(MONTH_ORDER.map((m,i)=>[m,i]));
+  agg.sort((a,b)=> (idx.has(a.key)?idx.get(a.key):999) - (idx.has(b.key)?idx.get(b.key):999));
+  renderMonthlyKPIs(agg);
+  renderMonthlyChart(agg);
+  renderMonthlyTable(agg);
+}
+
+let clientSearchTerm = '';
+let topNClientAnalysis = 15;
+
+function renderClientsKPIs(agg){
+  const row = document.getElementById('clientsKpiRow');
+  row.innerHTML = '';
+  const totalRevenue = agg.reduce((a,b)=>a+b.Revenue,0);
+  const totalMargin = agg.reduce((a,b)=>a+b.Margin,0);
+  const blendedMarginPct = totalRevenue !== 0 ? (totalMargin / totalRevenue * 100) : 0;
+  const items = [
+    {label:'Total Clients', value: fmtNum(agg.length)},
+    {label:'Total Revenue', value: fmtCr(totalRevenue)},
+    {label:'Total Margin', value: fmtCr(totalMargin)},
+    {label:'Blended Margin % (overall)', value: Math.round(blendedMarginPct)+'%'},
+  ];
+  items.forEach(it=>{
+    const div = document.createElement('div'); div.className='kpi';
+    div.innerHTML = `<div class="label">${it.label}</div><div class="value">${it.value}</div>`;
+    row.appendChild(div);
+  });
+}
+
+function renderClientAnalysisChart(agg){
+  destroy('clientAnalysis');
+  const ctx = document.getElementById('clientAnalysisChart');
+  const n = (typeof topNClientAnalysis !== 'undefined' && topNClientAnalysis !== Infinity) ? topNClientAnalysis : agg.length;
+  const top = agg.slice(0, n);
+  const rawKeys = top.map(c=>c.key);
+  charts.clientAnalysis = new Chart(ctx, {
+    type:'bar',
+    data:{
+      labels: top.map(c=>c.key.length>26? c.key.slice(0,24)+'…': c.key),
+      datasets:[{label:'Revenue (Cr)', data: top.map(c=>Math.round(c.Revenue/1e7)), backgroundColor: PALETTE[4], borderRadius:5}]
+    },
+    options:{
+      indexAxis:'y', responsive:true, maintainAspectRatio:false,
+      plugins:{
+        legend:{display:false},
+        datalabels:{ display:true, clip:true, color: currentDatalabelColor, font:{size:10, weight:'600'}, anchor:'end', align:'right', formatter:(v)=> v }
+      },
+      scales:{x:{title:{display:true, text:'₹ Cr'}}},
+      onClick:(evt, elements)=>{ if(elements.length) drillFilter('client', rawKeys[elements[0].index]); }
+    }
+  });
+}
+
+function renderClientAnalysisTable(agg){
+  const tbody = document.querySelector('#clientAnalysisTable tbody');
+  tbody.innerHTML = '';
+  const term = clientSearchTerm.trim().toLowerCase();
+  let filtered = term ? agg.filter(c => c.key.toLowerCase().includes(term)) : agg;
+  const fullCount = filtered.length;
+  const n = (typeof topNClientAnalysis !== 'undefined' && topNClientAnalysis !== Infinity) ? topNClientAnalysis : filtered.length;
+  filtered = filtered.slice(0, n);
+  filtered.forEach(c=>{
+    const tr = document.createElement('tr');
+    const pillClass = c.MarginPct >= 60 ? 'good' : (c.MarginPct >=0 ? 'mid':'bad');
+    tr.innerHTML = `<td>${c.key}</td><td class="num">${fmtCr(c.Revenue)}</td><td class="num">${fmtCr(c.Margin)}</td><td class="num"><span class="pill ${pillClass}">${Math.round(c.MarginPct)}%</span></td><td class="num">${fmtNum(c.Projects)}</td>`;
+    tbody.appendChild(tr);
+  });
+  document.getElementById('clientAnalysisTableTag').textContent = filtered.length + ' of ' + fullCount + ' clients';
+}
+
+function renderClientsTab(){
+  const rows = getFilteredRows();
+  const agg = [...aggregateBy(rows, 'client')].sort((a,b)=>b.Revenue-a.Revenue);
+  renderClientsKPIs(agg);
+  renderClientAnalysisChart(agg);
+  renderClientAnalysisTable(agg);
+}
+
+document.getElementById('clientSearch').addEventListener('input', e=>{
+  clientSearchTerm = e.target.value;
+  const rows = getFilteredRows();
+  const agg = [...aggregateBy(rows, 'client')].sort((a,b)=>b.Revenue-a.Revenue);
+  renderClientAnalysisTable(agg);
+});
+
+function handleTopNClientAnalysisChange(e){
+  topNClientAnalysis = parseTopN(e.target.value);
+  const rows = getFilteredRows();
+  const agg = [...aggregateBy(rows, 'client')].sort((a,b)=>b.Revenue-a.Revenue);
+  renderClientAnalysisChart(agg);
+  renderClientAnalysisTable(agg);
+}
+document.getElementById('topNClientAnalysis').addEventListener('input', handleTopNClientAnalysisChange);
+document.getElementById('topNClientAnalysis').addEventListener('change', handleTopNClientAnalysisChange);
+
+function renderServicesKPIs(agg){
+  const row = document.getElementById('servicesKpiRow');
+  row.innerHTML = '';
+  const totalRevenue = agg.reduce((a,b)=>a+b.Revenue,0);
+  const totalMargin = agg.reduce((a,b)=>a+b.Margin,0);
+  const best = agg.length ? [...agg].sort((a,b)=>b.MarginPct-a.MarginPct)[0] : null;
+  const items = [
+    {label:'Total Services', value: fmtNum(agg.length)},
+    {label:'Total Revenue', value: fmtCr(totalRevenue)},
+    {label:'Total Margin', value: fmtCr(totalMargin)},
+    {label:'Best Margin % Service', value: best ? best.key : '-'},
+  ];
+  items.forEach(it=>{
+    const div = document.createElement('div'); div.className='kpi';
+    div.innerHTML = `<div class="label">${it.label}</div><div class="value">${it.value}</div>`;
+    row.appendChild(div);
+  });
+}
+
+function renderServiceAnalysisChart(agg){
+  destroy('serviceAnalysis');
+  const ctx = document.getElementById('serviceAnalysisChart');
+  const labels = agg.map(s=>s.key);
+  charts.serviceAnalysis = new Chart(ctx, {
+    type:'bar',
+    data:{
+      labels,
+      datasets:[
+        {label:'Revenue (Cr)', data: agg.map(s=>Math.round(s.Revenue/1e7)), backgroundColor:'rgba(79,139,208,0.55)', borderRadius:5, yAxisID:'y'},
+        {label:'Margin (Cr)', data: agg.map(s=>Math.round(s.Margin/1e7)), backgroundColor:'rgba(217,164,65,0.7)', borderRadius:5, yAxisID:'y'}
+      ]
+    },
+    options:{
+      responsive:true, maintainAspectRatio:false,
+      layout:{padding:{top:18}},
+      plugins:{
+        legend:{position:'bottom'},
+        datalabels:{ display:true, clip:true, color: currentDatalabelColor, font:{size:10, weight:'600'}, anchor:'end', align:'top', formatter:(v)=> v }
+      },
+      scales:{
+        x:{ticks:{autoSkip:false, maxRotation:45, minRotation:30}},
+        y:{title:{display:true,text:'₹ Cr'}}
+      },
+      onClick:(evt, elements)=>{ if(elements.length) drillFilter('service', labels[elements[0].index]); }
+    }
+  });
+}
+
+function renderServiceAnalysisTable(agg){
+  const tbody = document.querySelector('#serviceAnalysisTable tbody');
+  tbody.innerHTML = '';
+  agg.forEach(s=>{
+    const tr = document.createElement('tr');
+    const pillClass = s.MarginPct >= 60 ? 'good' : (s.MarginPct >=0 ? 'mid':'bad');
+    tr.innerHTML = `<td>${s.key}</td><td class="num">${fmtCr(s.Revenue)}</td><td class="num">${fmtCr(s.Margin)}</td><td class="num"><span class="pill ${pillClass}">${Math.round(s.MarginPct)}%</span></td><td class="num">${fmtNum(s.Projects)}</td>`;
+    tbody.appendChild(tr);
+  });
+  document.getElementById('serviceAnalysisTableTag').textContent = agg.length + ' services';
+}
+
+function renderServicesTab(){
+  const rows = getFilteredRows();
+  const agg = [...aggregateBy(rows, 'service')].sort((a,b)=>b.Revenue-a.Revenue);
+  renderServicesKPIs(agg);
+  renderServiceAnalysisChart(agg);
+  renderServiceAnalysisTable(agg);
+}
+
+function renderStatusChart(chartId, canvasId, agg, filterKey){
+  destroy(chartId);
+  const ctx = document.getElementById(canvasId);
+  const labels = agg.map(a=>a.key);
+  charts[chartId] = new Chart(ctx, {
+    type:'doughnut',
+    data:{
+      labels,
+      datasets:[{data: agg.map(a=>a.Count), backgroundColor: PALETTE, borderWidth:2, borderColor:'#121b2e'}]
+    },
+    options:{
+      responsive:true, maintainAspectRatio:false,
+      plugins:{
+        legend:{position:'bottom'},
+        datalabels:{ display:true, color: currentDatalabelColor, font:{size:11, weight:'700'}, formatter:(v)=> v }
+      },
+      onClick:(evt, elements)=>{ if(elements.length && filterKey) drillFilter(filterKey, labels[elements[0].index]); }
+    }
+  });
+}
+
+function renderStatusTable(tableId, agg){
+  const tbody = document.querySelector('#' + tableId + ' tbody');
+  tbody.innerHTML = '';
+  agg.forEach(a=>{
+    const tr = document.createElement('tr');
+    tr.innerHTML = `<td>${a.key}</td><td class="num">${fmtNum(a.Count)}</td><td class="num">${fmtCr(a.Revenue)}</td>`;
+    tbody.appendChild(tr);
+  });
+}
+
+function renderStatusTab(){
+  const rows = getFilteredRows();
+
+  const invoiceAgg = [...aggregateCountRevenue(rows, 'invoiceStatus')].sort((a,b)=>b.Count-a.Count);
+  renderStatusChart('statusInvoice', 'statusInvoiceChart', invoiceAgg, 'invoiceStatus');
+  renderStatusTable('statusInvoiceTable', invoiceAgg);
+
+  const projectAgg = [...aggregateCountRevenue(rows, 'projectStatus')].sort((a,b)=>b.Count-a.Count);
+  renderStatusChart('statusProject', 'statusProjectChart', projectAgg, 'projectStatus');
+  renderStatusTable('statusProjectTable', projectAgg);
+
+  const reviewAgg = [...aggregateCountRevenue(rows, 'reviewInvoice')].sort((a,b)=>b.Count-a.Count);
+  renderStatusTable('statusReviewTable', reviewAgg);
+}
+
+function renderQuarterKPIs(agg){
+  const row = document.getElementById('quarterKpiRow');
+  row.innerHTML = '';
+  const totalRevenue = agg.reduce((a,b)=>a+b.Revenue,0);
+  const totalMargin = agg.reduce((a,b)=>a+b.Margin,0);
+  const bestQ = agg.length ? [...agg].sort((a,b)=>b.MarginPct-a.MarginPct)[0] : null;
+  const last = agg.length ? agg[agg.length-1] : null;
+  const prevLast = agg.length>1 ? agg[agg.length-2] : null;
+  const qoqRev = (last && prevLast && prevLast.Revenue) ? ((last.Revenue-prevLast.Revenue)/Math.abs(prevLast.Revenue)*100) : null;
+  const qoqMp = (last && prevLast) ? (last.MarginPct-prevLast.MarginPct) : null;
+  const items = [
+    {label:'Total Revenue', value: fmtCr(totalRevenue)},
+    {label:'Total Margin', value: fmtCr(totalMargin)},
+    {label:'Quarters in View', value: fmtNum(agg.length)},
+    {label:'Best Margin % Quarter', value: bestQ ? bestQ.key : '-'},
+    {label:'Latest QoQ Revenue Growth', value: qoqRev===null?'-':(qoqRev>=0?'+':'')+Math.round(qoqRev)+'%', cls: qoqRev===null?'':(qoqRev>=0?'up':'down')},
+    {label:'Latest QoQ Margin % Change', value: qoqMp===null?'-':(qoqMp>=0?'+':'')+Math.round(qoqMp)+' pts', cls: qoqMp===null?'':(qoqMp>=0?'up':'down')},
+  ];
+  items.forEach(it=>{
+    const div = document.createElement('div'); div.className='kpi';
+    div.innerHTML = `<div class="label">${it.label}</div><div class="value">${it.value}</div>` + (it.cls!==undefined?`<div class="delta ${it.cls||''}"></div>`:'');
+    row.appendChild(div);
+  });
+}
+
+function renderQuarterChart(agg){
+  destroy('quarter');
+  const ctx = document.getElementById('quarterChart');
+  const labels = agg.map(q=>q.key);
+  charts.quarter = new Chart(ctx, {
+    data:{
+      labels,
+      datasets:[
+        {type:'bar', label:'Revenue (Cr)', data: agg.map(q=>Math.round(q.Revenue/1e7)), backgroundColor:'rgba(79,139,208,0.55)', borderRadius:5, yAxisID:'y'},
+        {type:'bar', label:'Margin (Cr)', data: agg.map(q=>Math.round(q.Margin/1e7)), backgroundColor:'rgba(217,164,65,0.7)', borderRadius:5, yAxisID:'y'},
+        {type:'line', label:'Margin %', data: agg.map(q=>q.MarginPct), borderColor:COLORS.teal, backgroundColor:COLORS.teal, tension:0.35, yAxisID:'y1', pointRadius:4}
+      ]
+    },
+    options:{
+      responsive:true, maintainAspectRatio:false,
+      interaction:{mode:'index', intersect:false},
+      layout:{padding:{top:18}},
+      scales:{
+        y:{position:'left', grid:{color:'rgba(255,255,255,0.06)'}, title:{display:true,text:'₹ Cr'}},
+        y1:{position:'right', grid:{display:false}, title:{display:true,text:'Margin %'}, min:0}
+      },
+      plugins:{
+        legend:{position:'bottom', labels:{boxWidth:12}},
+        datalabels:{
+          display:true, clip:true, color: currentDatalabelColor, font:{size:10, weight:'600'}, anchor:'end', align:'top',
+          formatter:(v, ctx)=> ctx.dataset.type==='line' ? Math.round(v)+'%' : v
+        }
+      },
+      onClick:(evt, elements)=>{ if(elements.length) drillFilter('quarter', labels[elements[0].index]); }
+    }
+  });
+}
+
+function renderQuarterTable(agg){
+  const tbody = document.querySelector('#quarterTable tbody');
+  tbody.innerHTML = '';
+  agg.forEach((q,i)=>{
+    const tr = document.createElement('tr');
+    const pillClass = q.MarginPct >= 60 ? 'good' : (q.MarginPct >=0 ? 'mid':'bad');
+    const prev = i>0 ? agg[i-1] : null;
+    const revDelta = (prev && prev.Revenue) ? ((q.Revenue-prev.Revenue)/Math.abs(prev.Revenue)*100) : null;
+    const mpDelta = prev ? (q.MarginPct - prev.MarginPct) : null;
+    const revDeltaHtml = revDelta===null ? '-' : `<span class="${revDelta>=0?'up':'down'}">${revDelta>=0?'+':''}${Math.round(revDelta)}%</span>`;
+    const mpDeltaHtml = mpDelta===null ? '-' : `<span class="${mpDelta>=0?'up':'down'}">${mpDelta>=0?'+':''}${Math.round(mpDelta)} pts</span>`;
+    tr.innerHTML = `<td>${q.key}</td><td class="num">${fmtCr(q.Revenue)}</td><td class="num">${fmtCr(q.Margin)}</td><td class="num"><span class="pill ${pillClass}">${Math.round(q.MarginPct)}%</span></td><td class="num">${fmtNum(q.Projects)}</td><td class="num">${revDeltaHtml}</td><td class="num">${mpDeltaHtml}</td>`;
+    tbody.appendChild(tr);
+  });
+  document.getElementById('quarterTableTag').textContent = agg.length + ' quarters';
+}
+
+function renderQuarterTab(){
+  const rows = getFilteredRows();
+  const agg = [...aggregateBy(rows, 'quarter')].filter(q=>q.key && q.key !== '(blank)');
+  agg.sort((a,b)=> quarterSortKey(a.key) - quarterSortKey(b.key));
+  renderQuarterKPIs(agg);
+  renderQuarterChart(agg);
+  renderQuarterTable(agg);
+}
+
+let cmpSelectedGroups = new Set();
+
+function populateCmpGroups(){
+  const dim = document.getElementById('cmpDimension').value;
+  const rows = getFilteredRows();
+  const agg = aggregateBy(rows, dim);
+  let sortedForOrder = [...agg];
+  if (dim === 'month'){
+    const idx = new Map(MONTH_ORDER.map((m,i)=>[m,i]));
+    sortedForOrder.sort((a,b)=> (idx.has(a.key)?idx.get(a.key):999) - (idx.has(b.key)?idx.get(b.key):999));
+  } else if (dim === 'quarter'){
+    sortedForOrder.sort((a,b)=> quarterSortKey(a.key) - quarterSortKey(b.key));
+  } else {
+    sortedForOrder.sort((a,b)=>b.Revenue-a.Revenue);
+  }
+  const values = sortedForOrder.map(a=>a.key);
+
+  const stillValid = new Set(values.filter(v => cmpSelectedGroups.has(v)));
+  if (stillValid.size === 0 && values.length){
+    const byRevenue = [...agg].sort((a,b)=>b.Revenue-a.Revenue).slice(0,3).map(a=>a.key);
+    byRevenue.forEach(v=>stillValid.add(v));
+  }
+  cmpSelectedGroups = stillValid;
+
+  const listEl = document.getElementById('cmpGroupsList');
+  listEl.innerHTML = '';
+  values.forEach(v=>{
+    const row = document.createElement('label');
+    row.className = 'ms-option';
+    const cb = document.createElement('input');
+    cb.type = 'checkbox';
+    cb.value = v;
+    cb.checked = cmpSelectedGroups.has(v);
+    const span = document.createElement('span');
+    span.textContent = v;
+    row.appendChild(cb); row.appendChild(span);
+    listEl.appendChild(row);
+  });
+
+  updateCmpGroupsBtn();
+  renderComparisonTab();
+}
+
+function updateCmpGroupsBtn(){
+  const btn = document.getElementById('cmpGroupsBtn');
+  const n = cmpSelectedGroups.size;
+  btn.textContent = n === 0 ? 'Select groups' : (n === 1 ? [...cmpSelectedGroups][0] : n + ' groups selected');
+  btn.classList.toggle('active', n>0);
+}
+
+document.getElementById('cmpGroupsBtn').addEventListener('click', (e)=>{
+  e.stopPropagation();
+  document.querySelectorAll('.ms-panel.open').forEach(p=>{ if(p.id!=='cmpGroupsPanel') p.classList.remove('open'); });
+  document.getElementById('cmpGroupsPanel').classList.toggle('open');
+});
+document.getElementById('cmpGroupsPanel').addEventListener('click', e=>e.stopPropagation());
+document.getElementById('cmpGroupsSearch').addEventListener('input', e=>{
+  const term = e.target.value.toLowerCase();
+  document.querySelectorAll('#cmpGroupsList .ms-option').forEach(opt=>{
+    opt.style.display = opt.textContent.toLowerCase().includes(term) ? '' : 'none';
+  });
+});
+document.getElementById('cmpGroupsAll').addEventListener('click', ()=>{
+  document.querySelectorAll('#cmpGroupsList .ms-option').forEach(opt=>{
+    if (opt.style.display !== 'none') opt.querySelector('input').checked = true;
+  });
+  cmpSelectedGroups = new Set(Array.from(document.querySelectorAll('#cmpGroupsList input:checked')).map(c=>c.value));
+  updateCmpGroupsBtn();
+  renderComparisonTab();
+});
+document.getElementById('cmpGroupsClear').addEventListener('click', ()=>{
+  document.querySelectorAll('#cmpGroupsList input').forEach(c=>c.checked=false);
+  cmpSelectedGroups = new Set();
+  updateCmpGroupsBtn();
+  renderComparisonTab();
+});
+document.getElementById('cmpGroupsList').addEventListener('change', ()=>{
+  cmpSelectedGroups = new Set(Array.from(document.querySelectorAll('#cmpGroupsList input:checked')).map(c=>c.value));
+  updateCmpGroupsBtn();
+  renderComparisonTab();
+});
+document.getElementById('cmpDimension').addEventListener('change', ()=>{
+  cmpSelectedGroups = new Set();
+  populateCmpGroups();
+});
+
+function renderComparisonTab(){
+  const dim = document.getElementById('cmpDimension').value;
+  const rows = getFilteredRows();
+  const agg = aggregateBy(rows, dim);
+  const map = new Map(agg.map(a=>[a.key, a]));
+
+  let selected = Array.from(cmpSelectedGroups);
+  if (dim === 'month'){
+    const idx = new Map(MONTH_ORDER.map((m,i)=>[m,i]));
+    selected.sort((a,b)=> (idx.has(a)?idx.get(a):999) - (idx.has(b)?idx.get(b):999));
+  } else if (dim === 'quarter'){
+    selected.sort((a,b)=> quarterSortKey(a) - quarterSortKey(b));
+  } else {
+    selected.sort();
+  }
+
+  const groups = selected.map(key => ({ key, ...(map.get(key) || {Revenue:0, Margin:0, MarginPct:0, Projects:0}) }));
+
+  const row = document.getElementById('cmpKpiRow');
+  row.innerHTML = '';
+  if (groups.length){
+    const totalRevenue = groups.reduce((a,b)=>a+b.Revenue,0);
+    const totalMargin = groups.reduce((a,b)=>a+b.Margin,0);
+    const best = [...groups].sort((a,b)=>b.MarginPct-a.MarginPct)[0];
+    const worst = [...groups].sort((a,b)=>a.MarginPct-b.MarginPct)[0];
+    const items = [
+      {label:'Groups Selected', value: fmtNum(groups.length)},
+      {label:'Combined Revenue', value: fmtCr(totalRevenue)},
+      {label:'Combined Margin', value: fmtCr(totalMargin)},
+      {label:'Best Margin %', value: best ? `${best.key} (${Math.round(best.MarginPct)}%)` : '-'},
+      {label:'Weakest Margin %', value: worst ? `${worst.key} (${Math.round(worst.MarginPct)}%)` : '-'},
+    ];
+    items.forEach(it=>{
+      const div = document.createElement('div'); div.className='kpi';
+      div.innerHTML = `<div class="label">${it.label}</div><div class="value">${it.value}</div>`;
+      row.appendChild(div);
+    });
+  }
+
+  destroy('cmp');
+  const ctx = document.getElementById('cmpChart');
+  charts.cmp = new Chart(ctx, {
+    type:'bar',
+    data:{
+      labels:['Revenue (₹ Cr)','Margin (₹ Cr)','Margin %','Projects'],
+      datasets: groups.map((g,i)=>({
+        label: g.key,
+        data: [Math.round(g.Revenue/1e7), Math.round(g.Margin/1e7), +Math.round(g.MarginPct), g.Projects],
+        backgroundColor: PALETTE[i % PALETTE.length],
+        borderRadius:5
+      }))
+    },
+    options:{
+      responsive:true, maintainAspectRatio:false,
+      layout:{padding:{top:18}},
+      plugins:{
+        legend:{position:'bottom'},
+        datalabels:{ display:true, clip:true, color: currentDatalabelColor, font:{size:9, weight:'600'}, anchor:'end', align:'top', formatter:(v)=> v }
+      }
+    }
+  });
+
+  const tbody = document.querySelector('#cmpTable tbody');
+  tbody.innerHTML = '';
+  const baseline = groups.length ? groups[0] : null;
+  groups.forEach((g,i)=>{
+    const tr = document.createElement('tr');
+    let revDeltaHtml = '-', mpDeltaHtml = '';
+    if (i===0){
+      revDeltaHtml = '<span class="delta">baseline</span>';
+    } else if (baseline){
+      const revDelta = baseline.Revenue ? ((g.Revenue-baseline.Revenue)/Math.abs(baseline.Revenue)*100) : null;
+      revDeltaHtml = revDelta===null ? '-' : `<span class="${revDelta>=0?'up':'down'}">${revDelta>=0?'+':''}${Math.round(revDelta)}%</span>`;
+    }
+    const mpDelta = (baseline && i>0) ? (g.MarginPct - baseline.MarginPct) : null;
+    mpDeltaHtml = mpDelta===null ? (i===0 ? '-' : '-') : `<span class="${mpDelta>=0?'up':'down'}">${mpDelta>=0?'+':''}${Math.round(mpDelta)} pts</span>`;
+    const pillClass = g.MarginPct >= 60 ? 'good' : (g.MarginPct >=0 ? 'mid':'bad');
+    tr.innerHTML = `<td>${g.key}</td><td class="num">${fmtCr(g.Revenue)}</td><td class="num">${revDeltaHtml}</td><td class="num">${fmtCr(g.Margin)}</td><td class="num"><span class="pill ${pillClass}">${Math.round(g.MarginPct)}%</span></td><td class="num">${mpDeltaHtml}</td><td class="num">${fmtNum(g.Projects)}</td>`;
+    tbody.appendChild(tr);
+  });
+  document.getElementById('cmpTableTag').textContent = groups.length + ' groups, vs ' + (baseline ? baseline.key : 'first selected');
+}
+
 document.querySelectorAll('.tabbtn').forEach(btn=>{
   btn.addEventListener('click', ()=>{
     document.querySelectorAll('.tabbtn').forEach(b=>b.classList.remove('active'));
     document.querySelectorAll('.tabpage').forEach(p=>p.classList.remove('active'));
     btn.classList.add('active');
-    document.getElementById('tab-'+btn.dataset.tab).classList.add('active');
-    if(btn.dataset.tab === 'projects'){ renderProjectTab(); }
+    const tabId = 'tab-'+btn.dataset.tab;
+    document.getElementById(tabId).classList.add('active');
+    renderTab(tabId);
   });
 });
 
-// ---------------- Project-wise tab ----------------
 let projSearchTerm = '';
 let projNegOnly = false;
-let projChartsInit = false;
+let projPosOnly = false;
+
+function colLabel(c){
+  return c === '_marginStatus' ? 'Margin Status' : c;
+}
+
+const PROJECT_COLUMN_OPTIONS = [...ALL_HEADERS, '_marginStatus'];
+
+let projSelectedColumns = new Set([
+  ...(DEFAULT_PROJECT_COLUMNS && DEFAULT_PROJECT_COLUMNS.length ? DEFAULT_PROJECT_COLUMNS : ALL_HEADERS),
+  '_marginStatus'
+]);
+
+// isMarginPctColumn: matches the raw "Margin Percentage Based On Overall
+// Subtotal" columns (both the plain one and the "(Ops)" one, column BL),
+// regardless of exact spacing/capitalization, so their raw values are shown
+// as rounded percentages instead of bare numbers.
+function isMarginPctColumn(col){
+  const c = String(col||'').toLowerCase();
+  return c.includes('margin') && c.includes('percentage') && c.includes('overall') && c.includes('subtotal');
+}
+
+function colValue(p, col){
+  if (col === '_marginStatus'){
+    return (p.margin||0) < 0 ? '<span class="badge neg">Negative</span>' : '<span class="badge pos">Positive</span>';
+  }
+  const v = (p.allColumns && p.allColumns[col] !== undefined) ? p.allColumns[col] : '';
+  if (v === null || v === undefined || v === '') return '';
+  if (isMarginPctColumn(col)){
+    // The Streamlit backend reads the sheet's CSV export (where % cells come
+    // through as text like "95%"), then clean_numeric() strips the '%' and
+    // converts it straight to a plain number (95) - it is NOT a fraction, so
+    // no ×100 scaling is needed here, just round it and put the '%' back.
+    const num = parseFloat(String(v).replace('%','').trim());
+    if (!isNaN(num)) return Math.round(num) + '%';
+  }
+  return String(v);
+}
+
+function buildProjColsPanel(){
+  const listEl = document.getElementById('projColsList');
+  listEl.innerHTML = '';
+  PROJECT_COLUMN_OPTIONS.forEach(c=>{
+    const row = document.createElement('label');
+    row.className = 'ms-option';
+    const cb = document.createElement('input');
+    cb.type = 'checkbox';
+    cb.value = c;
+    cb.checked = projSelectedColumns.has(c);
+    const span = document.createElement('span');
+    span.textContent = colLabel(c);
+    row.appendChild(cb); row.appendChild(span);
+    listEl.appendChild(row);
+  });
+  updateProjColsBtn();
+}
+
+function updateProjColsBtn(){
+  const btn = document.getElementById('projColsBtn');
+  const n = projSelectedColumns.size;
+  btn.textContent = n === 0 ? 'Select columns' : n + ' columns selected';
+  btn.classList.toggle('active', n>0);
+}
+
+document.getElementById('projColsBtn').addEventListener('click', (e)=>{
+  e.stopPropagation();
+  document.querySelectorAll('.ms-panel.open').forEach(p=>{ if(p.id!=='projColsPanel') p.classList.remove('open'); });
+  document.getElementById('projColsPanel').classList.toggle('open');
+});
+document.getElementById('projColsPanel').addEventListener('click', e=>e.stopPropagation());
+document.getElementById('projColsSearch').addEventListener('input', e=>{
+  const term = e.target.value.toLowerCase();
+  document.querySelectorAll('#projColsList .ms-option').forEach(opt=>{
+    opt.style.display = opt.textContent.toLowerCase().includes(term) ? '' : 'none';
+  });
+});
+document.getElementById('projColsAll').addEventListener('click', ()=>{
+  document.querySelectorAll('#projColsList .ms-option').forEach(opt=>{
+    if (opt.style.display !== 'none') opt.querySelector('input').checked = true;
+  });
+  projSelectedColumns = new Set(Array.from(document.querySelectorAll('#projColsList input:checked')).map(c=>c.value));
+  updateProjColsBtn();
+  renderProjectTable();
+});
+document.getElementById('projColsClear').addEventListener('click', ()=>{
+  document.querySelectorAll('#projColsList input').forEach(c=>c.checked=false);
+  projSelectedColumns = new Set();
+  updateProjColsBtn();
+  renderProjectTable();
+});
+document.getElementById('projColsDefault').addEventListener('click', ()=>{
+  const defaults = new Set([
+    ...(DEFAULT_PROJECT_COLUMNS && DEFAULT_PROJECT_COLUMNS.length ? DEFAULT_PROJECT_COLUMNS : ALL_HEADERS),
+    '_marginStatus'
+  ]);
+  document.querySelectorAll('#projColsList input').forEach(c=>{ c.checked = defaults.has(c.value); });
+  projSelectedColumns = defaults;
+  updateProjColsBtn();
+  renderProjectTable();
+});
+document.getElementById('projColsList').addEventListener('change', ()=>{
+  projSelectedColumns = new Set(Array.from(document.querySelectorAll('#projColsList input:checked')).map(c=>c.value));
+  updateProjColsBtn();
+  renderProjectTable();
+});
 
 function renderProjKPIs(){
-  const neg = PROJECT_DATA.filter(p=>p.Margin<0);
-  const pos = PROJECT_DATA.filter(p=>p.Margin>0);
-  const totalNeg = neg.reduce((a,b)=>a+b.Margin,0);
+  const rows = getFilteredRows();
+  const neg = rows.filter(p=>(p.margin||0)<0);
+  const pos = rows.filter(p=>(p.margin||0)>0);
+  const totalNeg = neg.reduce((a,b)=>a+(b.margin||0),0);
   const row = document.getElementById('projKpiRow');
   row.innerHTML = '';
   const items = [
     {label:'Negative-Margin Projects', value: fmtNum(neg.length), cls:'down'},
     {label:'Positive-Margin Projects', value: fmtNum(pos.length), cls:'up'},
     {label:'Total Negative Margin', value: fmtCr(totalNeg), cls:'down'},
-    {label:'Total Projects', value: fmtNum(PROJECT_DATA.length), cls:''},
+    {label:'Total Projects', value: fmtNum(rows.length), cls:''},
   ];
   items.forEach(it=>{
     const div = document.createElement('div'); div.className='kpi';
@@ -456,17 +1817,35 @@ function renderProjKPIs(){
 function renderNegChart(){
   destroy('neg');
   const ctx = document.getElementById('negChart');
-  const neg = [...PROJECT_DATA].filter(p=>p.Margin<0).sort((a,b)=>a.Margin-b.Margin).slice(0,40);
+  const rows = getFilteredRows();
+  const neg = [...rows].filter(p=>(p.margin||0)<0).sort((a,b)=>a.margin-b.margin).slice(0,40);
   charts.neg = new Chart(ctx, {
     type:'bar',
     data:{
-      labels: neg.map(p=> p.ProjectCode.length>28 ? p.ProjectCode.slice(0,26)+'…' : p.ProjectCode),
-      datasets:[{label:'Margin (₹)', data: neg.map(p=>p.Margin), backgroundColor: COLORS.coral, borderRadius:4}]
+      labels: neg.map(p=> p.projectCode.length>28 ? p.projectCode.slice(0,26)+'…' : p.projectCode),
+      datasets:[{label:'Margin (₹)', data: neg.map(p=>p.margin), backgroundColor: COLORS.coral, borderRadius:4}]
     },
     options:{
       indexAxis:'y', responsive:true, maintainAspectRatio:false,
-      plugins:{legend:{display:false}},
-      scales:{x:{title:{display:true, text:'Margin (₹)'}}, y:{ticks:{autoSkip:false, font:{size:9}}}}
+      plugins:{
+        legend:{display:false},
+        datalabels:{ display:true, clip:true, color: currentDatalabelColor, font:{size:9, weight:'600'}, anchor:'end', align:'right', formatter:(v)=> fmtCr(v) }
+      },
+      scales:{x:{title:{display:true, text:'Margin (₹)'}}, y:{ticks:{autoSkip:false, font:{size:9}}}},
+      onClick:(evt, elements)=>{
+        if(!elements.length) return;
+        const code = neg[elements[0].index].projectCode;
+        projSearchTerm = code;
+        projNegOnly = false;
+        projPosOnly = false;
+        const searchInput = document.getElementById('projSearch');
+        if (searchInput) searchInput.value = code;
+        const negCb = document.getElementById('negOnly'); if (negCb) negCb.checked = false;
+        const posCb = document.getElementById('posOnly'); if (posCb) posCb.checked = false;
+        renderProjectTable();
+        const tableEl = document.getElementById('projectTable');
+        if (tableEl) tableEl.scrollIntoView({behavior:'smooth', block:'start'});
+      }
     }
   });
 }
@@ -474,45 +1853,61 @@ function renderNegChart(){
 function renderPosNegChart(){
   destroy('posneg');
   const ctx = document.getElementById('posNegChart');
-  const neg = PROJECT_DATA.filter(p=>p.Margin<0).length;
-  const pos = PROJECT_DATA.filter(p=>p.Margin>0).length;
+  const rows = getFilteredRows();
+  const neg = rows.filter(p=>(p.margin||0)<0).length;
+  const pos = rows.filter(p=>(p.margin||0)>0).length;
   charts.posneg = new Chart(ctx, {
     type:'doughnut',
     data:{
       labels:['Positive Margin','Negative Margin'],
       datasets:[{data:[pos,neg], backgroundColor:[COLORS.teal, COLORS.coral], borderWidth:2, borderColor:'#121b2e'}]
     },
-    options:{responsive:true, maintainAspectRatio:false, plugins:{legend:{position:'bottom'}}}
+    options:{
+      responsive:true, maintainAspectRatio:false,
+      plugins:{
+        legend:{position:'bottom'},
+        datalabels:{ display:true, color: currentDatalabelColor, font:{size:11, weight:'700'}, formatter:(v)=> v }
+      }
+    }
   });
 }
 
+function renderProjectTableHead(){
+  const thead = document.getElementById('projectTableHead');
+  const cols = PROJECT_COLUMN_OPTIONS.filter(c => projSelectedColumns.has(c));
+  thead.innerHTML = '<tr>' + cols.map(c => `<th>${colLabel(c)}</th>`).join('') + '</tr>';
+  return cols;
+}
+
 function renderProjectTable(){
+  const cols = renderProjectTableHead();
   const tbody = document.querySelector('#projectTable tbody');
   tbody.innerHTML = '';
-  const term = projSearchTerm.toLowerCase();
-  const rows = PROJECT_DATA.filter(p=>{
-    if(projNegOnly && p.Margin>=0) return false;
+  const term = projSearchTerm.trim().toLowerCase();
+  const searchFields = ['projectCode','client','clientSSC','service','month','examNameDate','bioFriDimensioning','invoiceStatus','billingStatus','opGuardData'];
+  const rows = getFilteredRows().filter(p=>{
+    if(projNegOnly && (p.margin||0)>=0) return false;
+    if(projPosOnly && (p.margin||0)<=0) return false;
     if(!term) return true;
-    return p.ProjectCode.toLowerCase().includes(term) || p.Client.toLowerCase().includes(term) || p.Service.toLowerCase().includes(term);
+    if (searchFields.some(field => String(p[field] ?? '').toLowerCase().includes(term))) return true;
+    if (p.allColumns) {
+      return Object.values(p.allColumns).some(v => String(v ?? '').toLowerCase().includes(term));
+    }
+    return false;
   });
   rows.forEach(p=>{
     const tr = document.createElement('tr');
-    tr.className = p.Margin < 0 ? 'row-neg' : 'row-pos';
-    const badge = p.Margin < 0 ? '<span class="badge neg">Negative</span>' : '<span class="badge pos">Positive</span>';
-    tr.innerHTML = `<td>${p.ProjectCode}</td><td>${p.Client}</td><td>${p.Service}</td><td>${p.Month}</td>` +
-      `<td class="num">${fmtNum(Math.round(p.Revenue))}</td><td class="num">${fmtNum(Math.round(p.Margin))}</td><td class="num">${p.MarginPct.toFixed(1)}%</td><td>${badge}</td>`;
+    tr.className = (p.margin||0) < 0 ? 'row-neg' : 'row-pos';
+    tr.innerHTML = cols.map(c => `<td>${colValue(p,c)}</td>`).join('');
     tbody.appendChild(tr);
   });
-  document.getElementById('projTableTag').textContent = rows.length + ' of ' + PROJECT_DATA.length + ' projects';
+  document.getElementById('projTableTag').textContent = rows.length + ' of ' + ROWS.length + ' projects';
 }
 
 function renderProjectTab(){
   renderProjKPIs();
-  if(!projChartsInit){
-    renderNegChart();
-    renderPosNegChart();
-    projChartsInit = true;
-  }
+  renderNegChart();
+  renderPosNegChart();
   renderProjectTable();
 }
 
@@ -522,243 +1917,193 @@ document.getElementById('projSearch').addEventListener('input', e=>{
 });
 document.getElementById('negOnly').addEventListener('change', e=>{
   projNegOnly = e.target.checked;
+  if(projNegOnly){ projPosOnly = false; document.getElementById('posOnly').checked = false; }
+  renderProjectTable();
+});
+document.getElementById('posOnly').addEventListener('change', e=>{
+  projPosOnly = e.target.checked;
+  if(projPosOnly){ projNegOnly = false; document.getElementById('negOnly').checked = false; }
   renderProjectTable();
 });
 
-populateFilters();
+let subtotalView = 'project';
+
+function renderSubtotalKPIs(rows){
+  const row = document.getElementById('subtotalKpiRow');
+  row.innerHTML = '';
+  const totalCandidate = rows.reduce((a,b)=>a+(b.totalCandidate||0),0);
+  const totalCentreCount = rows.reduce((a,b)=>a+(b.centreCount||0),0);
+  const totalOverallSubtotal = rows.reduce((a,b)=>a+(b.overallSubtotal||0),0);
+  const totalSubtotalOps = rows.reduce((a,b)=>a+(b.subtotalOps||0),0);
+
+  const perCandidateOverall = totalCandidate ? (totalOverallSubtotal / totalCandidate) : 0;
+  const perCandidateOps = totalCandidate ? (totalSubtotalOps / totalCandidate) : 0;
+  const perCameraOverall = totalCentreCount ? (totalOverallSubtotal / totalCentreCount) : 0;
+  const perCameraOps = totalCentreCount ? (totalSubtotalOps / totalCentreCount) : 0;
+
+  const items = [
+    { label: 'Total Candidate', value: fmtNum(Math.round(totalCandidate)) },
+    { label: 'Overall Subtotal', value: fmtCr(totalOverallSubtotal) },
+    { label: 'Subtotal (Ops)', value: fmtCr(totalSubtotalOps) },
+    { label: 'Rows in View', value: fmtNum(rows.length) },
+
+    { label: 'Per Candidate (Overall)', value: fmtNum(Math.round(perCandidateOverall)) },
+    { label: 'Per Candidate (Ops)', value: fmtNum(Math.round(perCandidateOps)) },
+    { label: 'Per Camera/OP/Guard (Overall)', value: fmtNum(Math.round(perCameraOverall)) },
+    { label: 'Per Camera/OP/Guard (Ops)', value: fmtNum(Math.round(perCameraOps)) },
+  ];
+  items.forEach(it=>{
+    const div = document.createElement('div'); div.className='kpi';
+    div.innerHTML = `<div class="label">${it.label}</div><div class="value">${it.value}</div>`;
+    row.appendChild(div);
+  });
+}
+
+function renderSubtotalTable(rows){
+  const thead = document.getElementById('subtotalTableHead');
+  const tbody = document.querySelector('#subtotalTable tbody');
+  tbody.innerHTML = '';
+
+  if (subtotalView === 'project'){
+    thead.innerHTML = `<tr><th>Project Code</th><th>Client</th><th class="num">Total Candidate</th><th>Op/Guard Actual Count/Cam Count/VOIP</th><th class="num">Overall Subtotal</th><th class="num">Subtotal (Ops)</th><th class="num">Per Candidate Subtotal OverlAll</th><th class="num">Per Candidate Subtotal Ops</th><th class="num">Per Camera/OP/Gaurd Subtotal OverlAll</th><th class="num">Per Camera/OP/Gaurd Subtotal Ops</th></tr>`;
+    rows.forEach(p=>{
+      const tr = document.createElement('tr');
+      tr.innerHTML = `<td>${p.projectCode}</td><td>${p.client}</td><td class="num">${fmtNum(Math.round(p.totalCandidate||0))}</td><td>${p.opGuardData||''}</td><td class="num">${fmtNum(Math.round(p.overallSubtotal||0))}</td><td class="num">${fmtNum(Math.round(p.subtotalOps||0))}</td><td class="num">${fmtNum(Math.round(p.perCandidateSubtotalOverall||0))}</td><td class="num">${fmtNum(Math.round(p.perCandidateSubtotalOps||0))}</td><td class="num">${fmtNum(Math.round(p.perCameraOpGuardSubtotalOverall||0))}</td><td class="num">${fmtNum(Math.round(p.perCameraOpGuardSubtotalOps||0))}</td>`;
+      tbody.appendChild(tr);
+    });
+    document.getElementById('subtotalTableTag').textContent = rows.length + ' projects';
+  } else {
+    thead.innerHTML = `<tr><th>Client</th><th class="num">Total Candidate</th><th>Op/Guard Actual Count/Cam Count/VOIP</th><th class="num">Overall Subtotal</th><th class="num">Subtotal (Ops)</th><th class="num">Per Candidate Subtotal OverlAll</th><th class="num">Per Candidate Subtotal Ops</th><th class="num">Per Camera/OP/Gaurd Subtotal OverlAll</th><th class="num">Per Camera/OP/Gaurd Subtotal Ops</th><th class="num">Projects</th></tr>`;
+    const map = new Map();
+    rows.forEach(r=>{
+      const key = r.client || '(blank)';
+      if (!map.has(key)) map.set(key, {
+        TotalCandidate:0, CentreCount:0, OverallSubtotal:0, SubtotalOps:0, Projects:0, opGuardCount:0,
+      });
+      const g = map.get(key);
+      g.TotalCandidate += (r.totalCandidate||0);
+      g.CentreCount += (r.centreCount||0);
+      g.OverallSubtotal += (r.overallSubtotal||0);
+      g.SubtotalOps += (r.subtotalOps||0);
+      g.Projects += 1;
+      if (r.opGuardData) g.opGuardCount += 1;
+    });
+    const agg = Array.from(map.entries()).map(([key,g])=>({
+      key, ...g,
+      PerCandidateSubtotalOverall: g.TotalCandidate ? (g.OverallSubtotal / g.TotalCandidate) : 0,
+      PerCandidateSubtotalOps: g.TotalCandidate ? (g.SubtotalOps / g.TotalCandidate) : 0,
+      PerCameraOpGuardSubtotalOverall: g.CentreCount ? (g.OverallSubtotal / g.CentreCount) : 0,
+      PerCameraOpGuardSubtotalOps: g.CentreCount ? (g.SubtotalOps / g.CentreCount) : 0,
+    })).sort((a,b)=>b.OverallSubtotal-a.OverallSubtotal);
+    agg.forEach(c=>{
+      const tr = document.createElement('tr');
+      tr.innerHTML = `<td>${c.key}</td><td class="num">${fmtNum(Math.round(c.TotalCandidate))}</td><td>${c.opGuardCount} entries</td><td class="num">${fmtNum(Math.round(c.OverallSubtotal))}</td><td class="num">${fmtNum(Math.round(c.SubtotalOps))}</td><td class="num">${fmtNum(Math.round(c.PerCandidateSubtotalOverall))}</td><td class="num">${fmtNum(Math.round(c.PerCandidateSubtotalOps))}</td><td class="num">${fmtNum(Math.round(c.PerCameraOpGuardSubtotalOverall))}</td><td class="num">${fmtNum(Math.round(c.PerCameraOpGuardSubtotalOps))}</td><td class="num">${fmtNum(c.Projects)}</td>`;
+      tbody.appendChild(tr);
+    });
+    document.getElementById('subtotalTableTag').textContent = agg.length + ' clients';
+  }
+}
+
+function renderSubtotalTab(){
+  const rows = getFilteredRows();
+  renderSubtotalKPIs(rows);
+  renderSubtotalTable(rows);
+}
+
+document.querySelectorAll('input[name="subtotalView"]').forEach(radio=>{
+  radio.addEventListener('change', e=>{
+    if (e.target.checked){
+      subtotalView = e.target.value;
+      renderSubtotalTab();
+    }
+  });
+});
+
+// ---------------- Theme system ----------------
+// THEMES: each theme swaps the CSS custom properties that drive the whole
+// page's colors (background/panel/border/text/muted/grid) plus the accent
+// colors (gold/teal/coral/violet) used both in CSS and by Chart.js.
+const THEMES = {
+  dark:    { name:'Dark (Default)',  bg:'#0b1220', panel:'#121b2e', panel2:'#17233a', border:'#223252', text:'#e7ecf5', muted:'#8ea0c2', gold:'#d9a441', teal:'#33b8a8', coral:'#e0665f', violet:'#8b7ee8', grid:'rgba(255,255,255,0.06)', swatch:'#0b1220' },
+  midnight:{ name:'Midnight Blue',   bg:'#03060d', panel:'#0b1424', panel2:'#101d34', border:'#1c2b47', text:'#dbe6ff', muted:'#6f83ab', gold:'#e0b45a', teal:'#3fd0c0', coral:'#ef6f68', violet:'#9d8ff2', grid:'rgba(255,255,255,0.05)', swatch:'#0b1a33' },
+  forest:  { name:'Forest Green',    bg:'#0b120e', panel:'#121f18', panel2:'#182a21', border:'#25402f', text:'#e6f2ea', muted:'#83a692', gold:'#d9a441', teal:'#4fbf8b', coral:'#e0665f', violet:'#8b7ee8', grid:'rgba(255,255,255,0.06)', swatch:'#163523' },
+  sunset:  { name:'Sunset Warm',     bg:'#1a1210', panel:'#241a17', panel2:'#2e211c', border:'#4a332a', text:'#f5e9e2', muted:'#c79b83', gold:'#e0a441', teal:'#4fb6ac', coral:'#e0665f', violet:'#c98be0', grid:'rgba(255,255,255,0.06)', swatch:'#7a3b23' },
+  light:   { name:'Light',           bg:'#f4f6fb', panel:'#ffffff', panel2:'#eef1f8', border:'#d7deea', text:'#1b2434', muted:'#5b6b85', gold:'#b9791f', teal:'#128a7d', coral:'#c23f38', violet:'#6a5acd', grid:'rgba(0,0,0,0.07)', swatch:'#f4f6fb' },
+};
+const THEME_ORDER = ['dark','midnight','forest','sunset','light'];
+const THEME_STORAGE_KEY = 'marginDashboardTheme';
+let currentDatalabelColor = THEMES.dark.text;
+
+function applyTheme(name, skipRerender){
+  const t = THEMES[name] || THEMES.dark;
+  const root = document.documentElement.style;
+  root.setProperty('--bg', t.bg);
+  root.setProperty('--panel', t.panel);
+  root.setProperty('--panel-2', t.panel2);
+  root.setProperty('--border', t.border);
+  root.setProperty('--text', t.text);
+  root.setProperty('--muted', t.muted);
+  root.setProperty('--gold', t.gold);
+  root.setProperty('--teal', t.teal);
+  root.setProperty('--coral', t.coral);
+  root.setProperty('--violet', t.violet);
+  root.setProperty('--grid', t.grid);
+
+  // keep Chart.js text/gridline colors in sync with the chosen theme
+  Chart.defaults.color = t.muted;
+  Chart.defaults.borderColor = t.grid;
+  currentDatalabelColor = t.text;
+
+  const dot = document.getElementById('themeDot');
+  const label = document.getElementById('themeBtnLabel');
+  if (dot) { dot.style.background = t.gold; dot.style.boxShadow = '0 0 5px ' + t.gold; }
+  if (label) label.textContent = t.name;
+
+  document.querySelectorAll('.theme-option').forEach(el=>{
+    el.classList.toggle('selected', el.dataset.theme === name);
+  });
+
+  try { localStorage.setItem(THEME_STORAGE_KEY, name); } catch(e) {}
+
+  if (!skipRerender){
+    const active = document.querySelector('.tabpage.active');
+    renderTab(active ? active.id : 'tab-overview');
+  }
+}
+
+function buildThemePanel(){
+  const panel = document.getElementById('themePanel');
+  panel.innerHTML = '';
+  THEME_ORDER.forEach(key=>{
+    const t = THEMES[key];
+    const row = document.createElement('div');
+    row.className = 'theme-option';
+    row.dataset.theme = key;
+    row.innerHTML = `<span class="swatch" style="background:${t.swatch}"></span><span>${t.name}</span>`;
+    row.addEventListener('click', ()=>{
+      applyTheme(key);
+      document.getElementById('themePanel').classList.remove('open');
+    });
+    panel.appendChild(row);
+  });
+}
+
+document.getElementById('themeBtn').addEventListener('click', (e)=>{
+  e.stopPropagation();
+  document.querySelectorAll('.ms-panel.open').forEach(p=>p.classList.remove('open'));
+  document.getElementById('themePanel').classList.toggle('open');
+});
+document.getElementById('themePanel').addEventListener('click', e=>e.stopPropagation());
+
+buildThemePanel();
+let savedTheme = 'dark';
+try { savedTheme = localStorage.getItem(THEME_STORAGE_KEY) || 'dark'; } catch(e) {}
+applyTheme(savedTheme, true);
+
+buildFilterBar();
+buildProjColsPanel();
 document.getElementById('periodLabel').textContent = '__PERIOD_LABEL__';
 renderAll();
 </script>
 </body>
 </html>
------------------------------------------------------------------------------------------
-"""
-Margin Dashboard - Live Streamlit App (exact original UI)
-Fetches live data from a public Google Sheet, computes the same
-aggregates as the original static dashboard, and renders the
-ORIGINAL Chart.js HTML/CSS design via an embedded component.
-"""
-
-import json
-import urllib.parse
-from datetime import datetime
-from pathlib import Path
-
-import pandas as pd
-import streamlit as st
-import streamlit.components.v1 as components
-
-# ----------------------------------------------------------------------
-# CONFIG
-# ----------------------------------------------------------------------
-DEFAULT_SHEET_ID = "1u722Jf7tTX5l195AHxSU_fMHOQdZacoeAlLGqmgdPFc"
-DEFAULT_SHEET_NAME = "Raw Data"
-TEMPLATE_PATH = Path(__file__).parent / "assets" / "dashboard_template.html"
-
-st.set_page_config(page_title="Margin Dashboard", layout="wide", page_icon="📊", initial_sidebar_state="collapsed")
-st.markdown("""
-<style>
-.stApp{background:#0b1220;}
-[data-testid="collapsedControl"]{display:none;}
-section[data-testid="stSidebar"]{display:none;}
-div.block-container{padding-top:3.5rem;}
-div.stButton > button{
-  background:#17233a; color:#e7ecf5; border:1px solid #223252; border-radius:6px;
-}
-div.stButton > button:hover{border-color:#d9a441; color:#d9a441;}
-</style>
-""", unsafe_allow_html=True)
-
-sheet_id = DEFAULT_SHEET_ID
-sheet_name = DEFAULT_SHEET_NAME
-
-_, refresh_col = st.columns([8, 1])
-with refresh_col:
-    if st.button("🔄 Refresh"):
-        st.cache_data.clear()
-        st.rerun()
-
-# ----------------------------------------------------------------------
-# DATA LOADING
-# ----------------------------------------------------------------------
-def build_csv_url(sheet_id: str, sheet_name: str) -> str:
-    encoded_name = urllib.parse.quote(sheet_name)
-    return f"https://docs.google.com/spreadsheets/d/{sheet_id}/gviz/tq?tqx=out:csv&sheet={encoded_name}"
-
-
-@st.cache_data(ttl=60, show_spinner="Google Sheet se data la raha hu...")
-def load_raw_data(sheet_id: str, sheet_name: str) -> pd.DataFrame:
-    url = build_csv_url(sheet_id, sheet_name)
-    df = pd.read_csv(url)
-    df.columns = [c.strip() for c in df.columns]
-    return df
-
-
-def clean_numeric(series: pd.Series) -> pd.Series:
-    if series.dtype.kind in "if":
-        return series.astype(float)
-    cleaned = (
-        series.astype(str)
-        .str.replace(r"[₹,%\s]", "", regex=True)
-        .replace({"": None, "nan": None, "None": None, "-": None})
-    )
-    return pd.to_numeric(cleaned, errors="coerce")
-
-
-REQUIRED_COLS = [
-    "Client", "Service", "Month", "Exam Name", "Project Status",
-    "Revenue", "Margin Amount Based On Overall Subtotal",
-    "Margin Percentage Based On Overall Subtotal",
-    "Project Code Revenue Report",
-    "Invoice Status", "Review Based on Invoice (Raised/Pending)",
-]
-
-
-def prepare_data(raw: pd.DataFrame) -> pd.DataFrame:
-    df = raw.copy()
-    for c in REQUIRED_COLS:
-        if c not in df.columns:
-            df[c] = None
-
-    for c in ["Revenue", "Margin Amount Based On Overall Subtotal", "Margin Percentage Based On Overall Subtotal"]:
-        df[c] = clean_numeric(df[c])
-
-    # Fallback margin % if blank but revenue+margin amount present
-    mask = df["Margin Percentage Based On Overall Subtotal"].isna() & df["Revenue"].notna() & (df["Revenue"] != 0)
-    df.loc[mask, "Margin Percentage Based On Overall Subtotal"] = (
-        df.loc[mask, "Margin Amount Based On Overall Subtotal"] / df.loc[mask, "Revenue"] * 100
-    )
-    # Where revenue is 0/blank, force margin% to 0 to avoid inf/NaN in charts
-    zero_rev_mask = df["Revenue"].isna() | (df["Revenue"] == 0)
-    df.loc[zero_rev_mask, "Margin Percentage Based On Overall Subtotal"] = df.loc[
-        zero_rev_mask, "Margin Percentage Based On Overall Subtotal"
-    ].fillna(0)
-
-    df["Month"] = df["Month"].astype(str).str.strip()
-    df["Client"] = df["Client"].astype(str).str.strip()
-    df["Service"] = df["Service"].astype(str).str.strip()
-
-    # Drop fully blank rows
-    df = df[~((df["Client"].isin(["", "nan", "None"])) & df["Revenue"].isna())]
-
-    # ProjectCode: prefer sheet column, else build a fallback
-    pc = df["Project Code Revenue Report"].astype(str).str.strip()
-    fallback = (df["Client"] + "/" + df["Exam Name"].astype(str) + "/" + df["Service"]).str.replace(" ", "", regex=False)
-    df["ProjectCode"] = pc.where(~pc.isin(["", "nan", "None"]), fallback)
-
-    # Invoice status: prefer the review column, else Invoice Status
-    review = df["Review Based on Invoice (Raised/Pending)"].astype(str).str.strip()
-    invstat = df["Invoice Status"].astype(str).str.strip()
-    df["InvoiceStatusFinal"] = review.where(~review.isin(["", "nan", "None"]), invstat)
-
-    return df
-
-
-def month_sort_key(m: str):
-    try:
-        return datetime.strptime(m, "%b_%y")
-    except Exception:
-        return datetime.max
-
-
-def build_dashboard_json(df: pd.DataFrame):
-    # ---- monthly ----
-    monthly_g = df.groupby("Month", as_index=False).agg(
-        Revenue=("Revenue", "sum"),
-        Margin=("Margin Amount Based On Overall Subtotal", "sum"),
-        Projects=("Month", "count"),
-    )
-    monthly_g["MarginPct"] = (monthly_g["Margin"] / monthly_g["Revenue"] * 100).where(monthly_g["Revenue"] != 0, 0)
-    monthly_g = monthly_g.sort_values("Month", key=lambda s: s.map(month_sort_key))
-    monthly = monthly_g.to_dict("records")
-
-    # ---- client ----
-    client_g = df.groupby("Client", as_index=False).agg(
-        Revenue=("Revenue", "sum"),
-        Margin=("Margin Amount Based On Overall Subtotal", "sum"),
-        Projects=("Client", "count"),
-    )
-    client_g["MarginPct"] = (client_g["Margin"] / client_g["Revenue"] * 100).where(client_g["Revenue"] != 0, 0)
-    client = client_g.to_dict("records")
-
-    # ---- service ----
-    service_g = df.groupby("Service", as_index=False).agg(
-        Revenue=("Revenue", "sum"),
-        Margin=("Margin Amount Based On Overall Subtotal", "sum"),
-        Projects=("Service", "count"),
-    )
-    service_g["MarginPct"] = (service_g["Margin"] / service_g["Revenue"] * 100).where(service_g["Revenue"] != 0, 0)
-    service = service_g.to_dict("records")
-
-    # ---- project status ----
-    pstatus_g = df.groupby("Project Status", as_index=False).agg(
-        Revenue=("Revenue", "sum"), Count=("Project Status", "count")
-    )
-    pstatus_g = pstatus_g.rename(columns={"Project Status": "Project Status"})
-    pstatus = [{"Project Status": r["Project Status"], "Revenue": r["Revenue"], "Count": r["Count"]}
-               for r in pstatus_g.to_dict("records")]
-
-    # ---- invoice status ----
-    istatus_g = df.groupby("InvoiceStatusFinal", as_index=False).size()
-    istatus = [{"Invoice Status": r["InvoiceStatusFinal"], "Count": r["size"]} for r in istatus_g.to_dict("records")]
-
-    # ---- scatter (row level, for bubble chart + KPI averages) ----
-    scatter_df = df[["Client", "Exam Name", "Revenue", "Margin Percentage Based On Overall Subtotal", "Month", "Service"]].copy()
-    scatter_df = scatter_df.rename(columns={"Margin Percentage Based On Overall Subtotal": "MarginPct"})
-    scatter_df = scatter_df.dropna(subset=["Revenue"])
-    scatter = scatter_df.to_dict("records")
-
-    data_obj = {
-        "monthly": monthly,
-        "client": client,
-        "service": service,
-        "pstatus": pstatus,
-        "istatus": istatus,
-        "scatter": scatter,
-    }
-
-    # ---- project-level rows (Project-wise tab) ----
-    proj_df = df[["ProjectCode", "Client", "Service", "Month", "Revenue",
-                  "Margin Amount Based On Overall Subtotal", "Margin Percentage Based On Overall Subtotal"]].copy()
-    proj_df = proj_df.rename(columns={
-        "Margin Amount Based On Overall Subtotal": "Margin",
-        "Margin Percentage Based On Overall Subtotal": "MarginPct",
-    })
-    proj_df = proj_df.dropna(subset=["Margin"])
-    proj_df = proj_df.sort_values("Margin")
-    project_data = proj_df.to_dict("records")
-
-    return data_obj, project_data
-
-
-# ----------------------------------------------------------------------
-# LOAD + BUILD
-# ----------------------------------------------------------------------
-try:
-    raw_df = load_raw_data(sheet_id, sheet_name)
-    df = prepare_data(raw_df)
-except Exception as e:
-    st.error(f"Sheet load nahi ho payi. Sharing settings aur tab name check karo. Error: {e}")
-    st.stop()
-
-if df.empty:
-    st.warning("Sheet se koi valid row nahi mili. Column headers check karo.")
-    st.stop()
-
-data_obj, project_data = build_dashboard_json(df)
-
-months_present = sorted(df["Month"].dropna().unique().tolist(), key=month_sort_key)
-period_label = f"{months_present[0]} – {months_present[-1]}" if months_present else ""
-
-template_html = TEMPLATE_PATH.read_text(encoding="utf-8")
-final_html = (
-    template_html
-    .replace("__DATA_JSON__", json.dumps(data_obj, default=str))
-    .replace("__PROJECT_JSON__", json.dumps(project_data, default=str))
-    .replace("__PERIOD_LABEL__", period_label)
-)
-
-components.html(final_html, height=3200, scrolling=True)
-----------------------------------------------------------------------------------------------------------------------------------------------------------------
-
-
