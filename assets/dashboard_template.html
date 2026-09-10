@@ -1422,9 +1422,12 @@ function serviceColFormat(opt, val){
     const pillClass = val >= 60 ? 'good' : (val >= 0 ? 'mid' : 'bad');
     return `<span class="pill ${pillClass}">${Math.round(val)}%</span>`;
   }
+  if (opt.fmt === 'dec') return (val || 0).toFixed(2);
   return fmtNum(Math.round(val||0));
 }
 
+
+  
 function buildServiceColsPanel(){
   const listEl = document.getElementById('serviceColsList');
   listEl.innerHTML = '';
