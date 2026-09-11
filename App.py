@@ -169,7 +169,14 @@ COLUMN_TARGETS = {
     "ExamStartDate": ["Exam Start Date", "Exam Date", "Start Date"],
     "ExamNameDate": ["Exam Name & Date", "Exam Name"],
     "ProjectStatus": ["Project Status"],
-    "FinalProjectStatus": ["Final Project Status", "Final Status"],
+    # FIX: sheet's actual column CD header is literally "Exam Mode" - the
+    # dashboard's "Exam Mode" filter maps to this logical field
+    # (finalProjectStatus), but "Exam Mode" was never in the candidate list,
+    # so find_col()/find_col_loose() both failed to resolve it and the
+    # filter came through blank for every row. "Exam Mode" is now tried
+    # first; the older labels are kept as fallbacks in case the header
+    # text changes again later.
+    "FinalProjectStatus": ["Exam Mode", "Final Project Status", "Final Status"],
     "InvoiceStatus": ["Invoice Status"],
     "ReviewInvoice": ["Review Based on Invoice (Raised/Pending)"],
     "BillingType": ["Billing Type"],
