@@ -77,6 +77,15 @@
   }
   .clear-btn:hover{color:var(--coral); border-color:var(--coral);}
 
+  /* ---- Table export (CSV/Excel) button ---- */
+  .export-btn{
+    display:inline-flex; align-items:center; gap:6px;
+    background:var(--panel-2); border:1px solid var(--border); color:var(--gold);
+    border-radius:6px; padding:6px 12px; font-size:11.5px; font-weight:600;
+    cursor:pointer; font-family:inherit; margin-bottom:10px;
+  }
+  .export-btn:hover{border-color:var(--gold); background:rgba(217,164,65,0.1);}
+
   /* ---- Theme picker ---- */
   .theme-picker{position:relative;}
   .theme-btn{
@@ -605,6 +614,92 @@ const fmtCr = v => {
 };
 // fmtNum: formats a number using Indian digit grouping (e.g. 12,34,567).
 const fmtNum = v => Number(v).toLocaleString('en-IN');
+
+// ---------------- Table export (CSV, opens fine in Excel) ----------------
+// csvEscapeCell: wraps a cell's text in quotes (doubling any inner quotes)
+// only when it contains a comma, quote or newline - otherwise leaves it plain.
+function csvEscapeCell(text){
+  const t = String(text ?? '');
+  return /[",\n]/.test(t) ? '"' + t.replace(/"/g,'""') + '"' : t;
+}
+
+// tableToCSV: reads whatever is CURRENTLY rendered in a <table>'s thead/tbody
+// (i.e. respects active filters, search boxes, column pickers and Top-N
+// controls, since those already control what's in the DOM) and turns it into
+// a CSV string. td.textContent strips out badges/pills HTML automatically.
+function tableToCSV(table){
+  const lines = [];
+  const headRow = table.querySelector('thead tr');
+  if (headRow){
+    lines.push(Array.from(headRow.children).map(th => csvEscapeCell(th.textContent.trim())).join(','));
+  }
+  table.querySelectorAll('tbody tr').forEach(tr=>{
+    lines.push(Array.from(tr.children).map(td => csvEscapeCell(td.textContent.trim())).join(','));
+  });
+  return lines.join('\r\n');
+}
+
+// downloadCSV: triggers a browser download of the given CSV text. The
+// leading BOM (\ufeff) makes Excel open ₹/Δ and other non-ASCII characters
+// correctly instead of showing garbled text.
+function downloadCSV(filename, csvContent){
+  const blob = new Blob(['\ufeff' + csvContent], {type:'text/csv;charset=utf-8;'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+
+// exportTableById: looks up a table by id and downloads its current contents.
+function exportTableById(tableId, filename){
+  const table = document.getElementById(tableId);
+  if (!table) return;
+  downloadCSV(filename, tableToCSV(table));
+}
+
+// EXPORTABLE_TABLES: every data table in the dashboard that should get an
+// "Export CSV" button, with the filename to save it as.
+const EXPORTABLE_TABLES = [
+  {id:'clientTable', name:'client-wise-summary'},
+  {id:'monthlyTable', name:'monthly-trend'},
+  {id:'clientAnalysisTable', name:'client-analysis'},
+  {id:'serviceAnalysisTable', name:'service-analysis'},
+  {id:'statusInvoiceTable', name:'invoice-status'},
+  {id:'statusProjectTable', name:'project-status'},
+  {id:'statusReviewTable', name:'review-invoice-status'},
+  {id:'cmpTable', name:'comparison'},
+  {id:'quarterTable', name:'quarter-wise'},
+  {id:'projectTable', name:'all-projects'},
+  {id:'subtotalTable', name:'subtotal-details'}
+];
+
+// addExportButtons: inserts one "Export CSV" button right above each table
+// listed in EXPORTABLE_TABLES (before its .scroll-table wrapper). Runs once
+// at page load - the tables/wrappers themselves are static DOM elements
+// (only their tbody/thead innerHTML changes on re-render), so the buttons
+// don't need to be re-added when filters or tabs change.
+function addExportButtons(){
+  EXPORTABLE_TABLES.forEach(cfg=>{
+    const table = document.getElementById(cfg.id);
+    if (!table) return;
+    const wrapper = table.closest('.scroll-table');
+    if (!wrapper || wrapper.parentNode.querySelector('.export-btn[data-for="'+cfg.id+'"]')) return;
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'export-btn';
+    btn.dataset.for = cfg.id;
+    btn.textContent = '⬇ Export CSV (Excel)';
+    btn.addEventListener('click', ()=>{
+      const stamp = new Date().toISOString().slice(0,10);
+      exportTableById(cfg.id, cfg.name + '-' + stamp + '.csv');
+    });
+    wrapper.parentNode.insertBefore(btn, wrapper);
+  });
+}
 
 // parseTopN: reads a Top-N control's value (typed or picked from the
 // datalist) and returns a positive integer, or Infinity for "All"/blank/
@@ -2255,6 +2350,7 @@ applyTheme(savedTheme, true);
 buildFilterBar();
 buildProjColsPanel();
 buildServiceColsPanel();
+addExportButtons();
 document.getElementById('periodLabel').textContent = '__PERIOD_LABEL__';
 renderAll();
 </script>
